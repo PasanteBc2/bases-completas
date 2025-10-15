@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Consulta de Clientes</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #faf4fc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+        h2 {
+            color: #222;
+            margin-bottom: 20px;
+        }
+        form {
+            background: #ffffff;
+            padding: 25px 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+            width: 420px;
+            text-align: center;
+        }
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 90%;
+            height: 100px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #40035163;
+            resize: none;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        textarea:focus {
+            border-color: #37073c;
+            box-shadow: 0 0 0 2px rgba(252, 252, 252, 0.15);
+            outline: none;
+        }
+        label {
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            background-color: #eac4fd;
+            padding: 0 5px;
+            font-size: 13px;
+            color: #040404;
+        }
+        button {
+            width: 50%;
+            padding: 12px;
+            font-size: 15px;
+            background-color: #a77fe2;
+            color: white;
+            border: 1px solid #030303;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.9s;
+        }
+        button:hover { background-color: #ad52ee; }
+        .mensaje {
+            color: rgb(255, 3, 230);
+            margin-top: 15px;
+            text-align: center;
+        }
+        table {
+            margin-top: 30px;
+            border-collapse: collapse;
+            width: 90%;
+            max-width: 1000px;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #020000;
+            padding: 10px 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        th {
+            background-color: #49058d7a;
+            color: rgb(29, 4, 129);
+            font-weight: bold;
+        }
+        tr:nth-child(even) { background-color: #f8f9fa; }
+        tr:hover { background-color: #eef5ff; }
+    </style>
+</head>
+<body>
+    <h2>🔍 Consulta de Clientes</h2>
+
+    <form method="POST" action="/buscar" autocomplete="off">
+        <div class="input-group">
+            <label for="valores">Ingrese hasta 5 cédulas o celulares</label>
+            <textarea name="valores" id="valores" placeholder="Ejemplo: 0912345678, 0956784321, 1234567890"></textarea>
+        </div>
+        <button type="submit">Buscar</button>
+    </form>
+
+    {% if mensaje %}
+        <p class="mensaje">{{ mensaje }}</p>
+    {% endif %}
+
+    {% if resultados %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Identificación</th>
+                    <th>Celular</th>
+                    <th>Nombre Completo</th>
+                    <th>Origen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in resultados %}
+                <tr>
+                    <td>{{ fila.identificacion }}</td>
+                    <td>{{ fila.celular }}</td>
+                    <td>{{ fila.nombre_completo }}</td>
+                    <td>{{ fila.origen }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</body>
+</html>

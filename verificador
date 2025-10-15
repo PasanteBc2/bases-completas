@@ -1,0 +1,15 @@
+# 🧪 Función para validar cédula ecuatoriana
+def validar_cedula(cedula):
+    if len(cedula) != 10 or not cedula.isdigit():
+        return False
+    provincia = int(cedula[:2])
+    tercer_digito = int(cedula[2])
+    if provincia < 1 or provincia > 24 or tercer_digito >= 6:
+        return False
+    coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2]
+    suma = 0
+    for i in range(9):
+        valor = int(cedula[i]) * coeficientes[i]
+        suma += valor if valor < 10 else valor - 9
+    verificador = int(cedula[9])
+    return (suma + verificador) % 10 == 0

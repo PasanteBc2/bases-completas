@@ -1,0 +1,39 @@
+import pandas as pd
+import os
+
+carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases prepago'
+ruta_csv_original = os.path.join(carpeta_base, 'base_prepago_limpia_corregida.csv')
+ruta_csv_2023 = os.path.join(carpeta_base, 'base_prepago_2023.csv')
+
+# Leer CSV original y filtrar año 2023
+df_original = pd.read_csv(ruta_csv_original, encoding='latin1', low_memory=False)
+if 'anio' not in df_original.columns:
+    for col in df_original.columns:
+        if 'anio' in col.lower() or 'año' in col.lower():
+            df_original = df_original.rename(columns={col: 'anio'})
+            break
+
+df_2023_original = df_original[df_original['anio'] == '2023'].copy()
+df_2023_original = df_2023_original.astype(str).apply(lambda x: x.str.strip())
+
+# Leer CSV 2023 separado
+df_2023_separado = pd.read_csv(ruta_csv_2023, encoding='latin1', low_memory=False)
+df_2023_separado = df_2023_separado.astype(str).apply(lambda x: x.str.strip())
+
+# Asegurar mismo orden de columnas
+df_2023_separado = df_2023_separado[df_2023_original.columns]
+
+# Usar merge con indicador para detectar diferencias reales
+diferencias = df_2023_original.merge(
+    df_2023_separado, 
+    how='outer', 
+    indicator=True
+).query('_merge != "both"')
+
+if diferencias.empty:
+    print("✅ Todos los datos del 2023 coinciden exactamente con el CSV original.")
+else:
+    print(f"❌ Hay diferencias reales en {len(diferencias)} filas")
+    ruta_diferencias = os.path.join(carpeta_base, 'diferencias_2023.csv')
+    diferencias.to_csv(ruta_diferencias, index=False, encoding='latin1')
+    print(f"✅ Diferencias exportadas a: {ruta_diferencias}")

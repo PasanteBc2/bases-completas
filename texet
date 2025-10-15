@@ -1,0 +1,132 @@
+df = pd.read_excel('C:\\Users\\Analista BC\\Downloads\\base_pos.xlsx', sheet_name='Hoja1')
+-- Tabla de tipo de identificación
+CREATE TABLE tipo_identificacion (
+    id_tipo_ident SERIAL PRIMARY KEY,
+    nombre_tipo VARCHAR(10) NOT NULL
+);
+
+-- Tabla de provincias
+CREATE TABLE provincia (
+    id_provincia SERIAL PRIMARY KEY,
+    nombre_provincia VARCHAR(50) NOT NULL
+);
+
+-- Tabla de ciudades
+CREATE TABLE ciudad (
+    id_ciudad SERIAL PRIMARY KEY,
+    nombre_ciudad VARCHAR(100) NOT NULL,
+    id_provincia INTEGER REFERENCES provincia(id_provincia)
+);
+
+-- Tabla de instituciones financieras
+CREATE TABLE institucion_financiera (
+    id_institucion SERIAL PRIMARY KEY,
+    nombre_institucion VARCHAR(100) NOT NULL
+);
+
+-- Tabla de formas de pago
+CREATE TABLE forma_pago (
+    id_forma_pago SERIAL PRIMARY KEY,
+    desc_forma_pago VARCHAR(100) NOT NULL
+);
+
+-- Tabla de subproductos
+CREATE TABLE subproducto (
+    id_subproducto VARCHAR(10) PRIMARY KEY
+);
+
+-- Tabla de planes
+CREATE TABLE plan (
+    id_plan VARCHAR(20) PRIMARY KEY,
+    descripcion_plan TEXT NOT NULL
+    -- Ya no se relaciona directamente con subproducto
+);
+
+-- Tabla de ciclos
+CREATE TABLE ciclo (
+    id_ciclo INTEGER PRIMARY KEY
+);
+
+-- Tabla de clientes
+CREATE TABLE cliente (
+    id_cliente SERIAL PRIMARY KEY,
+    identificacion VARCHAR(20),
+    nombre_completo VARCHAR(200),
+    celular VARCHAR(15),
+    fecha_alta DATE,
+    id_tipo_ident INTEGER REFERENCES tipo_identificacion(id_tipo_ident),
+    id_provincia INTEGER REFERENCES provincia(id_provincia),
+    id_ciudad INTEGER REFERENCES ciudad(id_ciudad)
+);
+
+-- Tabla de años
+CREATE TABLE anio (
+    id_anio SERIAL PRIMARY KEY,
+    valor VARCHAR(4) UNIQUE NOT NULL
+);
+
+-- Tabla de meses
+CREATE TABLE mes (
+    id_mes SERIAL PRIMARY KEY,
+    nombre_mes VARCHAR(20) UNIQUE NOT NULL
+);
+
+-- Tabla de períodos de carga
+CREATE TABLE periodo_carga (
+    id_periodo SERIAL PRIMARY KEY,
+    id_anio INTEGER REFERENCES anio(id_anio),
+    id_mes INTEGER REFERENCES mes(id_mes),
+    texto_extraido VARCHAR(50) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de información del cliente y su plan
+CREATE TABLE cliente_plan_info (
+    id_cliente_plan_info SERIAL PRIMARY KEY,
+    id_cliente INTEGER REFERENCES cliente(id_cliente),
+    id_plan VARCHAR(20) REFERENCES plan(id_plan),
+    id_subproducto VARCHAR(10) REFERENCES subproducto(id_subproducto),
+    id_ciclo INTEGER REFERENCES ciclo(id_ciclo),
+    id_forma_pago INTEGER REFERENCES forma_pago(id_forma_pago),
+    id_institucion INTEGER REFERENCES institucion_financiera(id_institucion),
+    tb NUMERIC(12,2),
+    categoria1 VARCHAR(20),
+    id_periodo INTEGER REFERENCES periodo_carga(id_periodo)
+);
+
+
+INSERT INTO anio (valor)
+VALUES 
+    ('2019'),
+    ('2020'),
+    ('2021'),
+    ('2022'),
+    ('2023'),
+    ('2024'),
+	('2025')
+ON CONFLICT (valor) DO NOTHING;
+
+-- Poblar tabla mes con los 12 meses en español
+INSERT INTO mes (nombre_mes)
+VALUES 
+    ('ENERO'),
+    ('FEBRERO'),
+    ('MARZO'),
+    ('ABRIL'),
+    ('MAYO'),
+    ('JUNIO'),
+    ('JULIO'),
+    ('AGOSTO'),
+    ('SEPTIEMBRE'),
+    ('OCTUBRE'),
+    ('NOVIEMBRE'),
+    ('DICIEMBRE')
+ON CONFLICT (nombre_mes) DO NOTHING;
+select * from cliente_plan_info where id_cliente =141952
+select * from cliente where id_cliente = 141952
+pip install sqlalchemy
+
+
+
+
+

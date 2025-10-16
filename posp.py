@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from datetime import datetime
 import os
 from openpyxl import load_workbook
@@ -8,6 +9,12 @@ import glob
 from collections import Counter
 import sys
 import subprocess
+import logging
+
+# ---------------------
+# Logging (salida consola)
+# ---------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ==============================
 # 1️⃣ Conexión a PostgreSQL
@@ -19,17 +26,32 @@ puerto = '5432'
 base_datos = 'pospago'
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
-engine = create_engine(connection_string)
+try:
+    engine = create_engine(connection_string)
+    # test simple connect
+    with engine.connect() as conn:
+        pass
+    logging.info("✅ Conexión a PostgreSQL OK.")
+except OperationalError as e:
+    logging.exception("❌ Error de conexión a PostgreSQL. Verifica credenciales/servicio.")
+    raise SystemExit(e)
+except Exception as e:
+    logging.exception("❌ Error inesperado al crear engine de SQLAlchemy.")
+    raise SystemExit(e)
 
 # ==============================
 # Función para quitar negrita
 # ==============================
 def quitar_negrita_excel(ruta_archivo):
-    wb = load_workbook(ruta_archivo)
-    for ws in wb.worksheets:
-        for cell in ws[1]:
-            cell.font = Font(bold=False)
-    wb.save(ruta_archivo)
+    try:
+        wb = load_workbook(ruta_archivo)
+        for ws in wb.worksheets:
+            for cell in ws[1]:
+                cell.font = Font(bold=False)
+        wb.save(ruta_archivo)
+    except Exception as e:
+        logging.exception(f"❌ Error al quitar negrita en {ruta_archivo}: {e}")
+        raise
 
 # ==============================
 # 2️⃣ Buscar último Excel o CSV
@@ -37,27 +59,32 @@ def quitar_negrita_excel(ruta_archivo):
 carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases pospago'
 
 archivos_excel = [
-    f for f in glob.glob(os.path.join(carpeta_base, "*.xlsx")) + 
+    f for f in glob.glob(os.path.join(carpeta_base, "*.xlsx")) +
         glob.glob(os.path.join(carpeta_base, "*.csv"))
     if "_con_anio_mes" not in f and "_incompletos" not in f
 ]
 
 if not archivos_excel:
-    raise FileNotFoundError("❌ No se encontró ningún archivo Excel o CSV original en la carpeta.")
+    logging.error("❌ No se encontró ningún archivo Excel o CSV original en la carpeta.")
+    raise FileNotFoundError("No se encontró ningún archivo Excel o CSV original en la carpeta.")
 
 ruta_base = max(archivos_excel, key=os.path.getmtime)
-print(f"📥 Procesando archivo: {ruta_base}")
+logging.info(f"📥 Procesando archivo: {ruta_base}")
 
 # ==============================
 # 3️⃣ Leer archivo
 # ==============================
-if ruta_base.lower().endswith(".csv"):
-    df = pd.read_csv(ruta_base)
-else:
-    df = pd.read_excel(ruta_base, sheet_name=0)
+try:
+    if ruta_base.lower().endswith(".csv"):
+        df = pd.read_csv(ruta_base)
+    else:
+        df = pd.read_excel(ruta_base, sheet_name=0)
+except Exception as e:
+    logging.exception(f"❌ Error leyendo el archivo {ruta_base}: {e}")
+    raise SystemExit(e)
 
 df.columns = [c.lower().strip() for c in df.columns]
-print(f"✅ Total de registros cargados: {len(df)}")
+logging.info(f"✅ Total de registros cargados: {len(df)}")
 
 # ==============================
 # 🔟 Año y mes actuales
@@ -72,6 +99,12 @@ mes_actual = meses[fecha_actual.month]
 # ==============================
 # 4️⃣ Validar datos
 # ==============================
+# blindaciones iniciales: columnas esperadas
+for col_exp in ['nombre_completo', 'identificacion', 'celular']:
+    if col_exp not in df.columns:
+        logging.warning(f"⚠️ Columna esperada '{col_exp}' no encontrada. Se creará vacía.")
+        df[col_exp] = ""
+
 df['nombre_completo'] = df.get('nombre_completo', '').fillna('').astype(str)
 df['identificacion'] = df.get('identificacion', '').fillna('').astype(str)
 df['celular'] = df.get('celular', '').fillna('').astype(str)
@@ -85,16 +118,21 @@ duplicados_cel = df[df.duplicated('celular_norm', keep=False) & (df['celular_nor
 
 # ⚠️ Si hay errores, crear Excel y detener
 if mask_incompletos.any() or not duplicados_cel.empty:
-    nombre_archivo = f"INCORRECTA_{mes_actual}.xlsx"
-    ruta_incompletos = os.path.join(carpeta_base, nombre_archivo)
-    with pd.ExcelWriter(ruta_incompletos, engine='openpyxl') as writer:
-        if mask_incompletos.any():
-            incompletos = df.loc[mask_incompletos].copy()
-            incompletos.to_excel(writer, sheet_name='Incompletos', index=False)
-        if not duplicados_cel.empty:
-            duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False)
-    quitar_negrita_excel(ruta_incompletos)
-    sys.exit("🚫 Proceso detenido: se encontraron registros incompletos o duplicados.")
+    try:
+        nombre_archivo = f"INCORRECTA_{mes_actual}.xlsx"
+        ruta_incompletos = os.path.join(carpeta_base, nombre_archivo)
+        with pd.ExcelWriter(ruta_incompletos, engine='openpyxl') as writer:
+            if mask_incompletos.any():
+                incompletos = df.loc[mask_incompletos].copy()
+                incompletos.to_excel(writer, sheet_name='Incompletos', index=False)
+            if not duplicados_cel.empty:
+                duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False)
+        quitar_negrita_excel(ruta_incompletos)
+        logging.error("🚫 Proceso detenido: se encontraron registros incompletos o duplicados.")
+        sys.exit("Proceso detenido por registros incorrectos.")
+    except Exception as e:
+        logging.exception("❌ Error al generar archivo de registros incorrectos.")
+        raise SystemExit(e)
 
 df.drop(columns=['celular_norm'], inplace=True)
 
@@ -151,45 +189,67 @@ if "celular" in df.columns:
 # 8️⃣ Catálogo de planes
 # ==============================
 catalogo_path = os.path.join(carpeta_base, "nuevo", "catalogos bases.xlsx")
-catalogo_df = pd.read_excel(catalogo_path)
-catalogo_df.columns = [c.lower().strip() for c in catalogo_df.columns]
+if not os.path.exists(catalogo_path):
+    logging.warning("⚠️ Catálogo de planes no encontrado en 'nuevo/catalogos bases.xlsx'. Se omitirá relleno de descripción.")
+    catalogo_df = pd.DataFrame()
+else:
+    try:
+        catalogo_df = pd.read_excel(catalogo_path)
+        catalogo_df.columns = [c.lower().strip() for c in catalogo_df.columns]
+    except Exception as e:
+        logging.exception("❌ Error leyendo catálogo de planes.")
+        catalogo_df = pd.DataFrame()
 
-desc_col = next((c for c in catalogo_df.columns if "descripcion" in c or "descripción" in c), None)
-if desc_col is None:
-    raise ValueError("No se encontró columna de descripción en el catálogo.")
+desc_col = None
+if not catalogo_df.empty:
+    desc_col = next((c for c in catalogo_df.columns if "descripcion" in c or "descripción" in c), None)
+    if desc_col is None:
+        logging.warning("⚠️ No se encontró columna de descripción en el catálogo.")
+        desc_col = None
 
-catalogo_dict = dict(zip(catalogo_df['id_plan'], catalogo_df[desc_col]))
+catalogo_dict = {}
+if desc_col is not None and 'id_plan' in catalogo_df.columns:
+    catalogo_dict = dict(zip(catalogo_df['id_plan'], catalogo_df[desc_col]))
 
 def rellenar_descripcion(row):
     id_plan = row.get('id_plan')
     if pd.notna(id_plan) and id_plan in catalogo_dict:
         return catalogo_dict[id_plan]
-    return row.get(desc_col, "")
+    return row.get('descripcion_plan', "") if 'descripcion_plan' in row.index else ""
 
-if 'id_plan' in df.columns:
-    df[desc_col] = df.apply(rellenar_descripcion, axis=1)
+if 'id_plan' in df.columns and catalogo_dict:
+    try:
+        df['descripcion_plan'] = df.apply(rellenar_descripcion, axis=1)
+    except Exception as e:
+        logging.exception("❌ Error rellenando descripciones de plan. Se continuará sin esa información.")
 
 # ==============================
 # 9️⃣ Guardar base correcta
 # ==============================
-nombre_archivo = f"CORRECTA_{mes_actual}.xlsx"
-ruta_copia = os.path.join(carpeta_base, nombre_archivo)
-df.to_excel(ruta_copia, index=False)
-quitar_negrita_excel(ruta_copia)
-
-print(f"📂 Base correcta guardada en: {ruta_copia}")
-print(f"✅ Total registros válidos: {len(df)}")
+try:
+    nombre_archivo = f"CORRECTA_{mes_actual}.xlsx"
+    ruta_copia = os.path.join(carpeta_base, nombre_archivo)
+    df.to_excel(ruta_copia, index=False)
+    quitar_negrita_excel(ruta_copia)
+    logging.info(f"📂 Base correcta guardada en: {ruta_copia}")
+    logging.info(f"✅ Total registros válidos: {len(df)}")
+except Exception as e:
+    logging.exception("❌ Error guardando archivo CORRECTA_.")
+    raise SystemExit(e)
 
 # ==============================
 # 🔁 10️⃣ Ejecutar cargarpos.py automáticamente
 # ==============================
 if os.path.exists(ruta_copia):
-    print("\n🚀 Datos correctos. Ejecutando cargarpos.py para insertar en PostgreSQL...")
+    logging.info("\n🚀 Datos correctos. Ejecutando cargarpos.py para insertar en PostgreSQL...")
     ruta_cargarpos = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\cargarBases\cargarpos.py"
-    try:
-        subprocess.run(["python", ruta_cargarpos], check=True)
-        print("✅ cargarpos.py ejecutado correctamente. Datos reflejados en PgAdmin.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error al ejecutar cargarpos.py: {e}")
+    if not os.path.exists(ruta_cargarpos):
+        logging.error(f"❌ No se encontró el script cargarpos.py en: {ruta_cargarpos}")
+    else:
+        try:
+            subprocess.run(["python", ruta_cargarpos], check=True)
+            logging.info("✅ cargarpos.py ejecutado correctamente. Datos reflejados en PgAdmin.")
+        except subprocess.CalledProcessError as e:
+            logging.exception(f"❌ Error al ejecutar cargarpos.py: {e}")
 else:
-    print("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.")
+    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.")

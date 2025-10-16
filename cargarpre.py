@@ -1,11 +1,13 @@
 import pandas as pd
 from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-import glob
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 import os
+import glob
+import sys
+import traceback
 
 # ==============================
-# Configuración de la base de datos
+# 1️⃣ Conexión segura a PostgreSQL
 # ==============================
 usuario = 'postgres'
 contraseña = 'pasante'
@@ -13,50 +15,51 @@ host = 'localhost'
 puerto = '5432'
 base_datos = 'prepago'
 
-engine = create_engine(f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}')
+connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 
+try:
+    engine = create_engine(connection_string)
+    with engine.connect() as conn:
+        print("Conexión a PostgreSQL establecida correctamente.")
+except OperationalError as e:
+    sys.exit(f"No se pudo conectar a la base de datos: {e}")
+except Exception as e:
+    sys.exit(f"Error inesperado al conectar a la base de datos: {e}")
+
+# ==============================
+# 2️⃣ Detectar archivo CORRECTA
+# ==============================
 carpeta_excel = r"C:\Users\pasante.ti2\Desktop\bases prepago"
-patron = os.path.join(carpeta_excel, "CORRECTA_*.xlsx")  # usa mismo patrón que pospago
-archivos = glob.glob(patron)
-
-if not archivos:
-    # Alternativa: aceptar cualquier CORRECTA*.xlsx (sin guion)
-    patron2 = os.path.join(carpeta_excel, "*CORRECTA*.xlsx")
-    archivos = glob.glob(patron2)
+try:
+    archivos = glob.glob(os.path.join(carpeta_excel, "CORRECTA_*.xlsx"))
     if not archivos:
-        raise FileNotFoundError("❌ No se encontró ningún archivo 'CORRECTA' en la carpeta de prepago.")
-
-# elegir el más reciente por fecha de modificación
-ruta_excel = max(archivos, key=os.path.getmtime)
-print(f"📥 Archivo CORRECTA detectado: {ruta_excel}")
-
-# leer la primera hoja automáticamente
-excel = pd.ExcelFile(ruta_excel)
-nombre_hoja = excel.sheet_names[0]
-df = pd.read_excel(excel, sheet_name=nombre_hoja)
-df.columns = [col.lower().strip() for col in df.columns]
-print(f"✅ Hoja leída: {nombre_hoja} | columnas: {len(df.columns)}")
-
-
-
-
-
+        archivos = glob.glob(os.path.join(carpeta_excel, "*CORRECTA*.xlsx"))
+        if not archivos:
+            sys.exit("No se encontró ningún archivo 'CORRECTA' en la carpeta de prepago.")
+    ruta_excel = max(archivos, key=os.path.getmtime)
+    print(f"Archivo CORRECTA detectado: {ruta_excel}")
+except Exception as e:
+    sys.exit(f"Error detectando archivos CORRECTA: {e}")
 
 # ==============================
-# Normalización y limpieza
+# 3️⃣ Leer Excel
 # ==============================
-df.rename(columns={'año': 'anio'}, inplace=True)
+try:
+    df = pd.read_excel(ruta_excel)
+    df.columns = [c.lower().strip() for c in df.columns]
+    print(f"Hoja leída con {len(df)} registros y {len(df.columns)} columnas.")
+except Exception as e:
+    sys.exit(f"Error leyendo Excel: {e}")
 
+# ==============================
+# 4️⃣ Normalización y limpieza
+# ==============================
 df = df.fillna('')
-df['anio'] = df['anio'].astype(str).str.strip()
-df['mes'] = df['mes'].astype(str).str.strip().str.upper()
-df['texto_extraido'] = df['texto_extraido'].astype(str).str.strip()
-df['nombre_completo'] = df['nombre_completo'].astype(str).str.strip()
-df['monto_recarga'] = df['monto_recarga'].astype(str).str.strip()
-df['identificacion'] = df['identificacion'].astype(str).str.strip()
-df['celular'] = df['celular'].astype(str).str.strip()
+df.rename(columns={'año': 'anio'}, inplace=True)
+for col in ['anio','mes','texto_extraido','nombre_completo','monto_recarga','identificacion','celular']:
+    if col in df.columns:
+        df[col] = df[col].astype(str).str.strip()
 
-# 🔧 Limpiar identificaciones con '.0'
 def limpiar_identificacion(valor):
     valor = str(valor).strip()
     if valor.endswith('.0'):
@@ -68,10 +71,7 @@ def limpiar_identificacion(valor):
 
 df['identificacion'] = df['identificacion'].apply(limpiar_identificacion)
 df.loc[df['identificacion'] == '', 'identificacion'] = '9999999999'
-corregidos_identificacion = df['identificacion'].str.endswith('.0').sum()
-print(f"🔍 Identificaciones corregidas: {corregidos_identificacion}")
 
-# 🔧 Normalizar celulares
 def normalizar_celular(valor):
     valor = str(valor).strip()
     if valor == '':
@@ -82,63 +82,77 @@ def normalizar_celular(valor):
         return valor
 
 df['celular'] = df['celular'].apply(normalizar_celular)
-celulares_corregidos = df['celular'].apply(lambda x: len(x) < 10 or not x.isdigit()).sum()
-print(f"📱 Celulares potencialmente inconsistentes: {celulares_corregidos}")
 
 # ==============================
-# Cargar tablas de referencia
+# 5️⃣ Funciones para SQL con transacción y excepciones
 # ==============================
-df_anio = pd.read_sql('SELECT * FROM anio', engine)
-df_mes = pd.read_sql('SELECT * FROM mes', engine)
+def ejecutar_sql(sql, params=None):
+    try:
+        with engine.begin() as conn:  # Maneja commit/rollback automáticamente
+            if params:
+                conn.execute(sql, params)
+            else:
+                conn.execute(sql)
+        return True
+    except SQLAlchemyError as e:
+        print(f"Error ejecutando SQL: {e}")
+        return False
+
+def leer_sql(query):
+    try:
+        return pd.read_sql(query, engine)
+    except SQLAlchemyError as e:
+        print(f"Error leyendo SQL: {e}")
+        return pd.DataFrame()
+
+# ==============================
+# 6️⃣ Cargar tablas de referencia
+# ==============================
+df_anio = leer_sql('SELECT * FROM anio')
+df_mes = leer_sql('SELECT * FROM mes')
 
 df = df.merge(df_anio, left_on='anio', right_on='valor', how='left')
 df = df.merge(df_mes, left_on='mes', right_on='nombre_mes', how='left')
 
 if df['id_anio'].isnull().any() or df['id_mes'].isnull().any():
-    print("❌ Error: Algunos registros tienen año o mes inválido")
-    exit()
+    sys.exit("Error: Algunos registros tienen año o mes inválido.")
 
 # ==============================
-# Insertar nuevos periodos
+# 7️⃣ Insertar nuevos periodos
 # ==============================
-df_periodos = df[['id_anio', 'id_mes', 'texto_extraido']].drop_duplicates()
-periodos_existentes = pd.read_sql('SELECT id_anio, id_mes, texto_extraido FROM periodo_carga', engine)
-
-df_nuevos_periodos = df_periodos.merge(
-    periodos_existentes,
-    on=['id_anio', 'id_mes', 'texto_extraido'],
-    how='left',
-    indicator=True
-).query("_merge == 'left_only'").drop(columns=['_merge'])
+df_periodos = df[['id_anio','id_mes','texto_extraido']].drop_duplicates()
+periodos_existentes = leer_sql('SELECT id_anio,id_mes,texto_extraido FROM periodo_carga')
+df_nuevos_periodos = df_periodos.merge(periodos_existentes, on=['id_anio','id_mes','texto_extraido'], how='left', indicator=True)
+df_nuevos_periodos = df_nuevos_periodos[df_nuevos_periodos['_merge']=='left_only'].drop(columns=['_merge'])
 
 if not df_nuevos_periodos.empty:
-    print(f"🆕 Insertando {len(df_nuevos_periodos)} nuevos períodos...")
-    df_nuevos_periodos.to_sql('periodo_carga', engine, if_exists='append', index=False)
+    print(f"Insertando {len(df_nuevos_periodos)} nuevos periodos...")
+    try:
+        df_nuevos_periodos.to_sql('periodo_carga', engine, if_exists='append', index=False)
+    except SQLAlchemyError as e:
+        sys.exit(f"Error insertando nuevos periodos: {e}")
 else:
-    print("ℹ️ No hay nuevos períodos.")
+    print("No hay nuevos periodos.")
 
-# Refrescar tabla periodo_carga con IDs
-df_periodos_actualizados = pd.read_sql(
-    'SELECT id_periodo, id_anio, id_mes, texto_extraido FROM periodo_carga', engine
-)
-df = df.merge(df_periodos_actualizados, on=['id_anio', 'id_mes', 'texto_extraido'], how='left')
+# Refrescar periodo_carga
+df_periodos_actualizados = leer_sql('SELECT id_periodo,id_anio,id_mes,texto_extraido FROM periodo_carga')
+df = df.merge(df_periodos_actualizados, on=['id_anio','id_mes','texto_extraido'], how='left')
 
 # ==============================
-# Preparar DataFrame clientes
+# 8️⃣ Insertar clientes
 # ==============================
-df_clientes = df[['identificacion', 'celular', 'monto_recarga', 'nombre_completo']].copy()
-print(f"📋 Insertando {len(df_clientes)} registros en tabla cliente...")
+df_clientes = df[['identificacion','celular','monto_recarga','nombre_completo']].copy()
+print(f"Insertando {len(df_clientes)} registros en tabla cliente...")
 
 try:
     df_clientes.to_sql('cliente', engine, if_exists='append', index=False)
 except SQLAlchemyError as e:
-    print(f"❌ Error insertando clientes: {e}")
-    exit()
+    sys.exit(f"Error insertando clientes: {e}")
 
 # ==============================
-# Relacionar filas con id_cliente
+# 9️⃣ Asociar id_cliente
 # ==============================
-clientes_totales = pd.read_sql('SELECT id_cliente, identificacion, celular, nombre_completo FROM cliente', engine)
+clientes_totales = leer_sql('SELECT id_cliente,identificacion,celular,nombre_completo FROM cliente')
 n = len(df_clientes)
 clientes_nuevos = clientes_totales.tail(n).copy()
 
@@ -147,21 +161,20 @@ clientes_nuevos = clientes_nuevos.reset_index(drop=True)
 df_clientes['idx'] = df_clientes.index
 clientes_nuevos['idx'] = clientes_nuevos.index
 
-df_merged = pd.merge(df_clientes, clientes_nuevos[['id_cliente', 'idx']], on='idx')
-
+df_merged = pd.merge(df_clientes, clientes_nuevos[['id_cliente','idx']], on='idx')
 df = df.reset_index(drop=True)
 df['idx'] = df.index
-df = df.merge(df_merged[['idx', 'id_cliente']], on='idx', how='left')
+df = df.merge(df_merged[['idx','id_cliente']], on='idx', how='left')
 
 # ==============================
-# Preparar cliente_plan_info
+# 🔟 Insertar cliente_plan_info
 # ==============================
-df_stg = df[['id_cliente', 'id_periodo']].dropna().astype({'id_cliente': int, 'id_periodo': int})
-
-print(f"📥 Insertando {len(df_stg)} registros en cliente_plan_info...")
+df_stg = df[['id_cliente','id_periodo']].dropna().astype({'id_cliente':int,'id_periodo':int})
+print(f"Insertando {len(df_stg)} registros en cliente_plan_info...")
 
 try:
     df_stg.to_sql('cliente_plan_info', engine, if_exists='append', index=False)
-    print("✅ Carga completa en cliente_plan_info.")
+    print("Carga completa en cliente_plan_info.")
 except SQLAlchemyError as e:
-    print(f"❌ Error al insertar en cliente_plan_info: {e}")
+    print(f"Error al insertar en cliente_plan_info: {e}")
+ 

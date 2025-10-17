@@ -20,7 +20,7 @@ connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base
 try:
     engine = create_engine(connection_string)
     with engine.connect() as conn:
-        print("Conexión a PostgreSQL establecida correctamente.")
+        print("  Conexión a PostgreSQL establecida correctamente.")
 except OperationalError as e:
     sys.exit(f"No se pudo conectar a la base de datos: {e}")
 except Exception as e:
@@ -37,7 +37,7 @@ try:
         if not archivos:
             sys.exit("No se encontró ningún archivo 'CORRECTA' en la carpeta de prepago.")
     ruta_excel = max(archivos, key=os.path.getmtime)
-    print(f"Archivo CORRECTA detectado: {ruta_excel}")
+    print(f"  Archivo CORRECTA detectado: {ruta_excel}")
 except Exception as e:
     sys.exit(f"Error detectando archivos CORRECTA: {e}")
 
@@ -47,7 +47,7 @@ except Exception as e:
 try:
     df = pd.read_excel(ruta_excel)
     df.columns = [c.lower().strip() for c in df.columns]
-    print(f"Hoja leída con {len(df)} registros y {len(df.columns)} columnas.")
+    print(f" Hoja leída con {len(df)} registros y {len(df.columns)} columnas.")
 except Exception as e:
     sys.exit(f"Error leyendo Excel: {e}")
 
@@ -174,7 +174,7 @@ print(f"Insertando {len(df_stg)} registros en cliente_plan_info...")
 
 try:
     df_stg.to_sql('cliente_plan_info', engine, if_exists='append', index=False)
-    print("Carga completa en cliente_plan_info.")
+    print(" Carga completa en cliente_plan_info.")
 except SQLAlchemyError as e:
     print(f"Error al insertar en cliente_plan_info: {e}")
  

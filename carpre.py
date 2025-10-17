@@ -1,8 +1,7 @@
-import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
-import sys
-
+import pandas as pd  # manipular y analizar datos en formato de tablas (DataFrames)
+from sqlalchemy import create_engine  # Crea la conexión entre Python y la base de datos 
+from sqlalchemy.exc import SQLAlchemyError, OperationalError  # Manejar errores en la conexión o consultas SQL
+import sys  # Interactuacon el sistema (por ejemplo, cerrar el programa o leer argumentos externos)
 # ==============================
 # 1️⃣ Conexión segura a PostgreSQL
 # ==============================
@@ -27,7 +26,6 @@ except Exception as e:
 # 2️⃣ Leer todas las hojas del Excel
 # ==============================
 ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases prepago\nuevo\base_pre_2025.xlsx'
-
 try:
     print("📥 Leyendo archivo Excel (todas las hojas)...")
     hojas = pd.read_excel(ruta_excel, sheet_name=None)

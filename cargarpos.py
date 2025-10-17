@@ -1,15 +1,14 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
-import glob
-import os
-import logging
-import sys
+import pandas as pd # Para manejo de Excel y DataFrames
+from sqlalchemy import create_engine # Para conexión a PostgreSQL
+from sqlalchemy.exc import SQLAlchemyError, OperationalError # Para manejo de errores SQLAlchemy
+import glob   # Para búsqueda de archivos
+import os  # Para manejo de rutas
+import logging  # Para logging
 
 # ---------------------
 # Logging (salida consola)
 # ---------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s") # Configura logging
 
 # ==============================
 # 1️⃣ Conexión a PostgreSQL
@@ -225,7 +224,7 @@ try:
         # ==============================
         # 8️⃣ Mapear auxiliares para cliente y cliente_plan_info
         # ==============================
-        def cargar_tabla_auxiliar(query, columna_clave, conn):
+        def cargar_tabla_auxiliar(query, columna_clave, conn): 
             tabla = pd.read_sql(query, conn)
             tabla[columna_clave] = tabla[columna_clave].astype(str).str.strip().str.upper()
             return tabla.drop_duplicates(subset=[columna_clave])

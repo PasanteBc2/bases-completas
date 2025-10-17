@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.exc import OperationalError
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import Font
@@ -8,7 +8,6 @@ import glob
 import os
 import sys
 import subprocess
-import traceback
 
 # ==============================
 # 1️⃣ Conexión segura a PostgreSQL
@@ -23,7 +22,7 @@ connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base
 try:
     engine = create_engine(connection_string)
     with engine.connect() as conn:
-        print("Conexión a PostgreSQL establecida correctamente.")
+        print("✅ Conexión a PostgreSQL establecida correctamente.")
 except OperationalError as e:
     sys.exit(f"No se pudo conectar a la base de datos: {e}")
 except Exception as e:
@@ -64,7 +63,7 @@ except Exception as e:
 try:
     df = pd.read_excel(ruta_base)
     df.columns = [c.lower().strip() for c in df.columns]
-    print(f"Total registros cargados: {len(df)}")
+    print(f"✅ Total registros cargados: {len(df)}")
 except Exception as e:
     sys.exit(f"Error leyendo Excel: {e}")
 
@@ -117,10 +116,11 @@ if mask_incompletos.any() or not duplicados_cel.empty:
         print(f"Archivo INCORRECTA creado: {ruta_incorrecta}")
     except Exception:
         print(f"Error creando archivo INCORRECTA")
-    sys.exit("Proceso detenido por registros incompletos o duplicados.")
+    sys.exit("✅ Proceso detenido por registros incompletos o duplicados.")
 
 df['celular'] = df['celular_norm']
 df.drop(columns=['celular_norm'], inplace=True)
+
 
 # ==============================
 # 7️⃣ Añadir año, mes y texto extraído
@@ -142,7 +142,7 @@ ruta_correcta = os.path.join(carpeta_base, f"CORRECTA_{mes_actual}.xlsx")
 try:
     df.to_excel(ruta_correcta, index=False)
     quitar_negrita_excel(ruta_correcta)
-    print(f"Archivo CORRECTA guardado: {ruta_correcta}")
+    print(f"✅ Archivo CORRECTA guardado: {ruta_correcta}")
 except Exception:
     print(f"Error guardando archivo CORRECTA")
 
@@ -152,13 +152,14 @@ except Exception:
 ruta_cargarpre = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\cargarBases\cargarpre.py"
 if os.path.exists(ruta_correcta) and os.path.exists(ruta_cargarpre):
     try:
-        resultado = subprocess.run(["python", ruta_cargarpre], capture_output=True, text=True)
+        resultado = subprocess.run([sys.executable, ruta_cargarpre], capture_output=True, text=True)
+        print(resultado.stdout)
+        print(resultado.stderr)
         if resultado.returncode == 0:
-            print("cargarpre.py ejecutado correctamente.")
+            print("✅ cargarpre.py ejecutado correctamente.")
         else:
             print(f"Error al ejecutar cargarpre.py (código {resultado.returncode})")
-            print(resultado.stderr.strip() or "Sin detalles del error.")
-    except Exception:
-        print("Error ejecutando cargarpre.py")
+    except Exception as e:
+        print(f"Error ejecutando cargarpre.py: {e}")
 else:
     print("No se ejecuta cargarpre.py: CORRECTA o cargarpre.py no encontrado.")

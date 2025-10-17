@@ -1,15 +1,14 @@
-import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
-from datetime import datetime
-import os
-from openpyxl import load_workbook
-from openpyxl.styles import Font
-import glob
-from collections import Counter
-import sys
-import subprocess
-import logging
+import pandas as pd # para manipular dataframes
+from sqlalchemy import create_engine # para conexión a PostgreSQL
+from sqlalchemy.exc import OperationalError # para manejo de errores de conexión
+from datetime import datetime # para fechas
+import os # para rutas y archivos
+from openpyxl import load_workbook # para manipular Excel
+from openpyxl.styles import Font # para quitar negrita
+import glob # para buscar archivos
+import sys # para sys.exit
+import subprocess # para ejecutar cargarpos.py
+import logging # logging para consola
 
 # ---------------------
 # Logging (salida consola)
@@ -117,16 +116,16 @@ df['celular_norm'] = df['celular'].apply(lambda x: ''.join(filter(str.isdigit, x
 duplicados_cel = df[df.duplicated('celular_norm', keep=False) & (df['celular_norm'] != '')].copy()
 
 # ⚠️ Si hay errores, crear Excel y detener
-if mask_incompletos.any() or not duplicados_cel.empty:
+if mask_incompletos.any() or not duplicados_cel.empty: 
     try:
-        nombre_archivo = f"INCORRECTA_{mes_actual}.xlsx"
-        ruta_incompletos = os.path.join(carpeta_base, nombre_archivo)
+        nombre_archivo = f"INCORRECTA_{mes_actual}.xlsx" 
+        ruta_incompletos = os.path.join(carpeta_base, nombre_archivo) 
         with pd.ExcelWriter(ruta_incompletos, engine='openpyxl') as writer:
             if mask_incompletos.any():
                 incompletos = df.loc[mask_incompletos].copy()
-                incompletos.to_excel(writer, sheet_name='Incompletos', index=False)
+                incompletos.to_excel(writer, sheet_name='Incompletos', index=False) 
             if not duplicados_cel.empty:
-                duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False)
+                duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False) 
         quitar_negrita_excel(ruta_incompletos)
         logging.error("🚫 Proceso detenido: se encontraron registros incompletos o duplicados.")
         sys.exit("Proceso detenido por registros incorrectos.")
@@ -139,8 +138,8 @@ df.drop(columns=['celular_norm'], inplace=True)
 # ==============================
 # 5️⃣ Normalizaciones y reglas
 # ==============================
-if 'categoria1' not in df.columns:
-    df['categoria1'] = 'NO REGISTRA'
+if 'categoria1' not in df.columns: 
+    df['categoria1'] = 'NO REGISTRA' 
 else:
     df['categoria1'] = df['categoria1'].fillna('').astype(str).str.strip()
     df.loc[df['categoria1'] == '', 'categoria1'] = 'NO REGISTRA'
@@ -193,9 +192,9 @@ if not os.path.exists(catalogo_path):
     logging.warning("⚠️ Catálogo de planes no encontrado en 'nuevo/catalogos bases.xlsx'. Se omitirá relleno de descripción.")
     catalogo_df = pd.DataFrame()
 else:
-    try:
+    try: 
         catalogo_df = pd.read_excel(catalogo_path)
-        catalogo_df.columns = [c.lower().strip() for c in catalogo_df.columns]
+        catalogo_df.columns = [c.lower().strip() for c in catalogo_df.columns] 
     except Exception as e:
         logging.exception("❌ Error leyendo catálogo de planes.")
         catalogo_df = pd.DataFrame()
@@ -237,19 +236,19 @@ except Exception as e:
     logging.exception("❌ Error guardando archivo CORRECTA_.")
     raise SystemExit(e)
 
-# ==============================
-# 🔁 10️⃣ Ejecutar cargarpos.py automáticamente
-# ==============================
+# # ==============================
+# # 🔁 10️⃣ Ejecutar cargarpos.py automáticamente
+# # ==============================
 if os.path.exists(ruta_copia):
-    logging.info("\n🚀 Datos correctos. Ejecutando cargarpos.py para insertar en PostgreSQL...")
-    ruta_cargarpos = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\cargarBases\cargarpos.py"
-    if not os.path.exists(ruta_cargarpos):
-        logging.error(f"❌ No se encontró el script cargarpos.py en: {ruta_cargarpos}")
-    else:
-        try:
-            subprocess.run(["python", ruta_cargarpos], check=True)
-            logging.info("✅ cargarpos.py ejecutado correctamente. Datos reflejados en PgAdmin.")
-        except subprocess.CalledProcessError as e:
-            logging.exception(f"❌ Error al ejecutar cargarpos.py: {e}")
+      logging.info("\n🚀 Datos correctos. Ejecutando cargarpos.py para insertar en PostgreSQL...")
+      ruta_cargarpos = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\cargarBases\cargarpos.py"
+      if not os.path.exists(ruta_cargarpos):
+          logging.error(f"❌ No se encontró el script cargarpos.py en: {ruta_cargarpos}")
+      else:
+          try:
+              subprocess.run(["python", ruta_cargarpos], check=True)
+              logging.info("✅ cargarpos.py ejecutado correctamente. Datos reflejados en PgAdmin.")
+          except subprocess.CalledProcessError as e:
+              logging.exception(f"❌ Error al ejecutar cargarpos.py: {e}")
 else:
-    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.")
+      logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.")

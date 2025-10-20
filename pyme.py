@@ -10,7 +10,7 @@ import sys
 import unicodedata
 import re
 import logging
-import cargarpos 
+import cargarpyme 
 # Logging (salida consola)
 # ---------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -22,7 +22,7 @@ usuario = 'postgres'
 contraseña = 'pasante'
 host = 'localhost'
 puerto = '5432'
-base_datos = 'pospago'
+base_datos = 'base_pyme'
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 try:
@@ -295,9 +295,9 @@ except Exception as e:
 if os.path.exists(ruta_copia):
     logging.info("🚀 Ejecutando cargarpos.py con la conexión existente...")
     try:
-        cargarpos.cargar_datos(engine, ruta_copia)  # Pasamos engine y ruta del Excel
+        cargarpyme.cargar_datos(engine, ruta_copia)  # Pasamos engine y ruta del Excel
         logging.info("✅ cargarpos.py ejecutado correctamente.")
     except Exception as e:
         logging.exception(f"❌ Error ejecutando cargarpos.py: {e}")
 else:
-    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.") 
+    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.")

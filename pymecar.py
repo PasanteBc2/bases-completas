@@ -11,7 +11,7 @@ usuario = 'postgres'
 contraseña = 'pasante'
 host = 'localhost'
 puerto = '5432'
-base_datos = 'pospago'
+base_datos = 'base_pyme'
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 engine = create_engine(connection_string)
@@ -22,7 +22,7 @@ engine = create_engine(connection_string)
 ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2025.xlsx'
 try:
     print("📥 Leyendo archivo Excel (todas las hojas)...")
-    hojas = pd.read_excel(ruta_excel, sheet_name=None) 
+    hojas = pd.read_excel(ruta_excel, sheet_name=None)
     df_list = []
     for nombre_hoja, df_hoja in hojas.items():
         df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]

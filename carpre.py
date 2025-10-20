@@ -8,7 +8,7 @@ import sys  # Interactuacon el sistema (por ejemplo, cerrar el programa o leer a
 usuario = 'postgres'
 contraseña = 'pasante'
 host = 'localhost'
-puerto = '5432'
+puerto = '5432' 
 base_datos = 'prepago'
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'

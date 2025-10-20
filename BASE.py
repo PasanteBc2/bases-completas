@@ -12,7 +12,7 @@ puerto = '5432'
 
 # 🔁 Solo cambia esta variable según la base que quieras leer
 # Opciones: 'prepago' o 'pospago'
-base_origen = 'pospago'   # 👈 cambia aquí a 'pospago' cuando lo necesites
+base_origen = 'base_pyme'   # 👈 cambia aquí a 'pospago' cuando lo necesites
 
 # Base destino en PgAdmin
 base_destino = 'BASES'
@@ -31,18 +31,23 @@ engine_origen = create_engine(
 # ==============================
 # 3️⃣ CONSULTA AUTOMÁTICA
 # ==============================
+
 query = f"""
     SELECT 
         c.celular,
         c.identificacion,
         c.nombre_completo,
         pc.texto_extraido,
-        UPPER('{base_origen}') AS origen,
+        'PYME' AS origen, 
         '' AS proveedor
     FROM cliente c
    JOIN cliente_plan_info cpi ON c.id_cliente = cpi.id_cliente
-  JOIN periodo_carga pc ON cpi.id_periodo = pc.id_periodo
+   JOIN periodo_carga pc ON cpi.id_periodo = pc.id_periodo
+   WHERE cpi.id_periodo = 29
 """
+#'PYME' AS origen, 
+#WHERE cpi.id_periodo = 29
+#UPPER('{base_origen}') AS origen,
 
 df_origen = pd.read_sql(query, engine_origen)
 

@@ -7,7 +7,10 @@ from openpyxl.styles import Font
 import glob
 import os
 import sys
-import subprocess
+import unicodedata
+import re
+import logging
+import cargarpre  # Script de carga
 
 # ==============================
 # 1️⃣ Conexión segura a PostgreSQL
@@ -17,6 +20,7 @@ contraseña = 'pasante'
 host = 'localhost'
 puerto = '5432'
 base_datos = 'prepago'
+
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 
 try:
@@ -28,10 +32,13 @@ except OperationalError as e:
 except Exception as e:
     sys.exit(f"Error inesperado al conectar a la base de datos: {e}")
 
-# ==============================
+
+## ==============================
 # Función para quitar negrita en Excel
 # ==============================
 def quitar_negrita_excel(ruta_archivo):
+    from openpyxl import load_workbook
+    from openpyxl.styles import Font
     try:
         wb = load_workbook(ruta_archivo)
         for ws in wb.worksheets:
@@ -41,10 +48,13 @@ def quitar_negrita_excel(ruta_archivo):
     except Exception:
         print(f"Error quitando negrita en {ruta_archivo}")
 
+
+
 # ==============================
 # 2️⃣ Detectar último Excel en carpeta
 # ==============================
 carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases prepago'
+
 try:
     archivos_excel = [
         f for f in glob.glob(os.path.join(carpeta_base, "*.xlsx"))
@@ -57,109 +67,88 @@ try:
 except Exception as e:
     sys.exit(f"Error detectando archivos: {e}")
 
-# ==============================
-# 3️⃣ Leer Excel
-# ==============================
+# -----------------------------
+# 3️⃣ Leer archivo
+# -----------------------------
 try:
-    df = pd.read_excel(ruta_base)
-    df.columns = [c.lower().strip() for c in df.columns]
-    print(f"✅ Total registros cargados: {len(df)}")
+    if ruta_base.lower().endswith(".csv"):
+        df = pd.read_csv(ruta_base)
+    else:
+        df = pd.read_excel(ruta_base, sheet_name=0)
 except Exception as e:
-    sys.exit(f"Error leyendo Excel: {e}")
+    logging.exception(f"❌ Error leyendo el archivo {ruta_base}: {e}")
+    raise SystemExit(e)
 
-# ==============================
-# 4️⃣ Año, mes y texto extraído
-# ==============================
-fecha_actual = datetime.today()
-meses = {1: "ENERO",2: "FEBRERO",3: "MARZO",4: "ABRIL",5: "MAYO",6: "JUNIO",
-         7: "JULIO",8: "AGOSTO",9: "SEPTIEMBRE",10: "OCTUBRE",11: "NOVIEMBRE",12: "DICIEMBRE"}
-mes_actual = meses[fecha_actual.month]
+df.columns = [c.lower().strip() for c in df.columns]
+logging.info(f"✅ Total de registros cargados: {len(df)}")
 
-# ==============================
-# 5️⃣ Normalización y validaciones
-# ==============================
+# -----------------------------
+# 4️⃣ Limpiar desc_forma_pago
+# -----------------------------
+def limpiar_sin_tildes(texto):
+    if pd.isna(texto):
+        return ""
+    try:
+        texto = texto.encode('latin1', errors='ignore').decode('utf-8', errors='ignore')
+    except Exception:
+        pass
+    texto = unicodedata.normalize('NFKD', texto)
+    texto = texto.encode('ascii', 'ignore').decode('utf-8')
+    texto = texto.replace('/', ' ')
+    texto = re.sub(r'[^A-Za-z0-9Ññ\s.,-]', '', texto)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    texto = texto.upper()
+    return texto
+
+if 'desc_forma_pago' in df.columns:
+    df['desc_forma_pago'] = df['desc_forma_pago'].astype(str).apply(limpiar_sin_tildes)
+    logging.info("🧹 Columna 'desc_forma_pago' limpiada.")
+
+# -----------------------------
+# 5️⃣ Validaciones y normalizaciones (igual que tu prepago original)
+# -----------------------------
+for col_exp in ['nombre_completo', 'identificacion', 'celular']:
+    if col_exp not in df.columns:
+        logging.warning(f"⚠️ Columna esperada '{col_exp}' no encontrada. Se creará vacía.")
+        df[col_exp] = ""
+
 df['nombre_completo'] = df.get('nombre_completo', '').fillna('').astype(str)
 df['identificacion'] = df.get('identificacion', '').fillna('').astype(str)
 df['celular'] = df.get('celular', '').fillna('').astype(str)
 
-mask_nombre_vacio_id_presente = (df['nombre_completo'].str.strip() == '') & (df['identificacion'].str.strip() != '')
-df.loc[mask_nombre_vacio_id_presente, 'nombre_completo'] = 'NO REGISTRA'
-
-def normalizar_celular(c):
-    numeros = ''.join(filter(str.isdigit, str(c)))
-    if len(numeros) == 9:
-        return '0' + numeros
-    elif len(numeros) == 8:
-        return '09' + numeros
-    return numeros
-
-df['celular_norm'] = df['celular'].apply(normalizar_celular)
-
 mask_incompleto_id_vacia = (df['identificacion'].str.strip() == '') & (df['nombre_completo'].str.strip() != '')
-mask_celular_invalido = df['celular_norm'].apply(lambda x: len(x) < 10)
+mask_celular_invalido = df['celular'].apply(lambda x: len(''.join(filter(str.isdigit, x))) < 8)
 mask_incompletos = mask_incompleto_id_vacia | mask_celular_invalido
 
+df['celular_norm'] = df['celular'].apply(lambda x: ''.join(filter(str.isdigit, x)))
 duplicados_cel = df[df.duplicated('celular_norm', keep=False) & (df['celular_norm'] != '')].copy()
 
-# ==============================
-# 6️⃣ Guardar INCORRECTA si hay errores
-# ==============================
 if mask_incompletos.any() or not duplicados_cel.empty:
-    ruta_incorrecta = os.path.join(carpeta_base, f"INCORRECTA_{mes_actual}.xlsx")
-    try:
-        with pd.ExcelWriter(ruta_incorrecta, engine='openpyxl') as writer:
-            if mask_incompletos.any():
-                df.loc[mask_incompletos].to_excel(writer, sheet_name='Incompletos', index=False)
-            if not duplicados_cel.empty:
-                duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False)
-        quitar_negrita_excel(ruta_incorrecta)
-        print(f"Archivo INCORRECTA creado: {ruta_incorrecta}")
-    except Exception:
-        print(f"Error creando archivo INCORRECTA")
-    sys.exit("✅ Proceso detenido por registros incompletos o duplicados.")
+    nombre_archivo = f"INCORRECTA_{datetime.today().month}.xlsx"
+    ruta_incompletos = os.path.join(carpeta_base, nombre_archivo)
+    with pd.ExcelWriter(ruta_incompletos, engine='openpyxl') as writer:
+        if mask_incompletos.any():
+            df.loc[mask_incompletos].to_excel(writer, sheet_name='Incompletos', index=False)
+        if not duplicados_cel.empty:
+            duplicados_cel.to_excel(writer, sheet_name='Duplicados_Celular', index=False)
+    quitar_negrita_excel(ruta_incompletos)
+    logging.error("🚫 Proceso detenido: registros incorrectos.")
+    sys.exit("Proceso detenido.")
 
-df['celular'] = df['celular_norm']
 df.drop(columns=['celular_norm'], inplace=True)
-
-
-# ==============================
-# 7️⃣ Añadir año, mes y texto extraído
-# ==============================
-df['año'] = fecha_actual.year
-df['mes'] = mes_actual
-df['texto_extraido'] = fecha_actual.strftime("%d%b%Y").lower()
-cols = ['año', 'mes', 'texto_extraido'] + [c for c in df.columns if c not in ['año','mes','texto_extraido']]
-df = df[cols]
-
-if 'id_cliente' in df.columns:
-    df = df.drop_duplicates(subset=['id_cliente'])
-    print(f"Total registros únicos por cliente: {len(df)}")
 
 # ==============================
 # 8️⃣ Guardar CORRECTA
 # ==============================
-ruta_correcta = os.path.join(carpeta_base, f"CORRECTA_{mes_actual}.xlsx")
-try:
-    df.to_excel(ruta_correcta, index=False)
-    quitar_negrita_excel(ruta_correcta)
-    print(f"✅ Archivo CORRECTA guardado: {ruta_correcta}")
-except Exception:
-    print(f"Error guardando archivo CORRECTA")
+ruta_correcta = os.path.join(carpeta_base, "CORRECTA.xlsx")
+df.to_excel(ruta_correcta, index=False)
+print(f"✅ Archivo CORRECTA guardado: {ruta_correcta}")
 
 # ==============================
-# 9️⃣ Ejecutar cargarpre.py automáticamente
+# 9️⃣ Ejecutar cargarpre.py con la MISMA conexión
 # ==============================
-ruta_cargarpre = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\cargarBases\cargarpre.py"
-if os.path.exists(ruta_correcta) and os.path.exists(ruta_cargarpre):
-    try:
-        resultado = subprocess.run([sys.executable, ruta_cargarpre], capture_output=True, text=True)
-        print(resultado.stdout)
-        print(resultado.stderr)
-        if resultado.returncode == 0:
-            print("✅ cargarpre.py ejecutado correctamente.")
-        else:
-            print(f"Error al ejecutar cargarpre.py (código {resultado.returncode})")
-    except Exception as e:
-        print(f"Error ejecutando cargarpre.py: {e}")
-else:
-    print("No se ejecuta cargarpre.py: CORRECTA o cargarpre.py no encontrado.")
+try:
+    cargarpre.run_cargarpre(engine, ruta_correcta)  # 👈 usa engine del primer script
+    print("✅ cargarpre.py ejecutado correctamente usando la misma conexión.")
+except Exception as e:
+    print(f"❌ Error ejecutando cargarpre.py: {e}")

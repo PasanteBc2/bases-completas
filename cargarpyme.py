@@ -9,7 +9,7 @@ def cargar_datos(engine, ruta_excel):
     usando la conexión engine pasada desde posp.py
     """
     # -----------------------------
-    # 1️⃣ Leer Excel automáticamente
+    # 1️⃣ Leer Excel automáticamente 
     # -----------------------------
     try:
         excel = pd.ExcelFile(ruta_excel)

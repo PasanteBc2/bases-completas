@@ -145,4 +145,4 @@ def run_cargarpre(engine, ruta_excel):
         print("✅ Carga completa en cliente_plan_info.")
     except SQLAlchemyError as e: 
         print(f"Error al insertar en cliente_plan_info: {e}")
- 
+  

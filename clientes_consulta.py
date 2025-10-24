@@ -7,7 +7,8 @@ import logging
 # Configuración del logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-app = Flask(__name__)
+# Carpeta personalizada para plantillas
+app = Flask(__name__, template_folder='vistas_html')
 
 # Conexión a PostgreSQL
 usuario = 'postgres'
@@ -67,27 +68,26 @@ def buscar():
                c.identificacion,
                c.celular,
                c.nombre_completo,
+               c.texto_extraido,
+               a.valor AS año,
+               m.nombre_mes AS mes,
                o.nombre_origen AS origen
         FROM cliente_consolidado c
+        JOIN anio a ON a.id_anio = c.id_anio
+        JOIN mes m ON m.id_mes = c.id_mes
         JOIN origen o ON o.id_origen = c.id_origen
         WHERE {where_clause}
         ORDER BY 
             c.identificacion,
-            CASE o.nombre_origen 
-                WHEN 'PYME' THEN 1 
-                WHEN 'POSPAGO' THEN 2 
-                WHEN 'PREPAGO' THEN 3 
-                ELSE 99 
-            END,
-            c.id_anio DESC, 
-            c.id_mes DESC;
+            a.valor DESC,
+            m.id_mes DESC;
     """)
 
     try:
         df = pd.read_sql(query, engine, params=params)
     except Exception as e:
         logging.error(f"❌ Error en la consulta SQL: {e}")
-        return render_template('index.html', mensaje="❌ Error interno al consultar la base de datos.")
+        return render_template('index.html', mensaje="❌ Error al consultar la base de datos.")
 
     if df.empty:
         return render_template('index.html', mensaje="❌ No se encontraron registros.", valores_input=valores_input)
@@ -96,4 +96,4 @@ def buscar():
     return render_template('index.html', resultados=resultados, valores_input=valores_input)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5002) 
+    app.run(debug=True, port=5001)

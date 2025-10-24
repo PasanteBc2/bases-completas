@@ -11,7 +11,7 @@ usuario = 'postgres'
 contraseña = 'pasante'
 host = 'localhost'
 puerto = '5432'
-base_datos = 'base_pyme'
+base_datos = 'base_pyme' 
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 engine = create_engine(connection_string)

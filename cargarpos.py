@@ -20,7 +20,7 @@ def cargar_datos(engine, ruta_excel):
     except Exception as e:
         logging.exception("❌ Error leyendo el Excel.")
         raise
-
+ 
     # -----------------------------
     # 2️⃣ Normalizar columnas de periodo
     # -----------------------------

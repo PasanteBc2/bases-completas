@@ -20,7 +20,7 @@ engine = create_engine(connection_string)
 # 2️⃣ Leer Excel (todas las hojas)
 # ==============================
 ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2025.xlsx'
-try:
+try: 
     print("📥 Leyendo archivo Excel (todas las hojas)...")
     hojas = pd.read_excel(ruta_excel, sheet_name=None) 
     df_list = []

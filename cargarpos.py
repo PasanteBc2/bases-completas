@@ -8,7 +8,7 @@ def cargar_datos(engine, ruta_excel):
     Función principal para cargar datos desde Excel a PostgreSQL
     usando la conexión engine pasada desde posp.py 
     """
-    # -----------------------------
+    # ----------------------------- 
     # 1️⃣ Leer Excel automáticamente
     # -----------------------------
     try:

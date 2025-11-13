@@ -21,7 +21,7 @@ def cargar_datos(engine, ruta_excel):
         logging.exception("❌ Error leyendo el Excel.")
         raise
  
-    # -----------------------------
+    # ----------------------------- 
     # 2️⃣ Normalizar columnas de periodo
     # -----------------------------
     try:
@@ -81,7 +81,7 @@ def cargar_datos(engine, ruta_excel):
 
         periodos.append({'mes': mes, 'id_periodo': id_periodo})
 
-    # Asignar id_periodo a cada fila
+    # Asignar id_periodo a cada fila 
     periodo_map = pd.DataFrame(periodos)
     df = df.merge(periodo_map, on='mes', how='left')
 
@@ -207,3 +207,4 @@ def cargar_datos(engine, ruta_excel):
     except Exception as e:
         logging.exception("❌ Error inesperado durante la carga. Se aplicó ROLLBACK automático si correspondía.")
         raise
+ 

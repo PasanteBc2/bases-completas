@@ -125,7 +125,7 @@ def run_cargarpre(engine, ruta_excel):
     clientes_nuevos = clientes_totales.tail(n).copy()
 
     df_clientes = df_clientes.reset_index(drop=True)
-    clientes_nuevos = clientes_nuevos.reset_index(drop=True)
+    clientes_nuevos = clientes_nuevos.reset_index(drop=True) 
     df_clientes['idx'] = df_clientes.index
     clientes_nuevos['idx'] = clientes_nuevos.index
 

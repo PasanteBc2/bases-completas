@@ -1,17 +1,20 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import glob
 import os
 import sys
+import tkinter as tk
+from tkinter import filedialog
 
-# ==============================
+
+# ============================== 
 # 1️⃣ Conexión a PostgreSQL
-# ==============================
+# ============================== 
 usuario = 'postgres'
 contraseña = 'pasante'
 host = 'localhost'
 puerto = '5432'
-base_datos = 'base_pyme' 
+base_datos = 'pospago'
 
 connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
 engine = create_engine(connection_string)
@@ -19,10 +22,24 @@ engine = create_engine(connection_string)
 # ==============================
 # 2️⃣ Leer Excel (todas las hojas)
 # ==============================
-ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2025.xlsx'
-try:
-    print("📥 Leyendo archivo Excel (todas las hojas)...")
+
+# Ocultar ventana principal de Tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Seleccionar archivo Excel manualmente
+ruta_excel = filedialog.askopenfilename(
+    title="Selecciona el archivo Excel",
+    filetypes=[("Archivos Excel", "*.xlsx *.xls")]
+)
+
+if not ruta_excel:
+    sys.exit("❌ No se seleccionó ningún archivo. Ejecución cancelada.")
+
+try: 
+    print(f"📥 Leyendo archivo Excel seleccionado:\n{ruta_excel}")
     hojas = pd.read_excel(ruta_excel, sheet_name=None)
+
     df_list = []
     for nombre_hoja, df_hoja in hojas.items():
         df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]
@@ -30,14 +47,14 @@ try:
     df = pd.concat(df_list, ignore_index=True)
     print(f"✅ Total registros cargados de todas las hojas: {len(df)}")
 except Exception as e:
-    sys.exit(f"❌ Error leyendo Excel: {e}")
+    sys.exit(f"❌ Error leyendo Excel: {e}") 
 
 # ==============================
 # 🔧 Normalizar columnas de período
 # ==============================
 df['año'] = df['año'].astype(str).str.strip()
 df['mes'] = df['mes'].astype(str).str.strip().str.upper()
-df['texto_extraido'] = df['texto_extraido'].astype(str).str.strip()
+df['texto_extraido'] = df['texto_extraido'].astype(str).str.strip().str.lower()
 
 # Obtener id_anio
 año = str(int(float(df['año'].dropna().unique()[0]))).strip()
@@ -47,30 +64,29 @@ if anio_result.empty:
 
 id_anio = anio_result.iloc[0]['id_anio']
 
-# Crear períodos por cada mes único
+# Crear períodos únicos (por año, mes y texto_extraido)
 periodos = []
-meses_unicos = df['mes'].dropna()
-meses_unicos = meses_unicos[meses_unicos.str.strip() != ''].unique()
-texto_extraido = df['texto_extraido'].dropna().unique()[0]
+combinaciones = df[['mes', 'texto_extraido']].dropna().drop_duplicates()
 
-for mes in meses_unicos:
+for _, fila in combinaciones.iterrows():
+    mes = fila['mes']
+    texto_extraido = fila['texto_extraido']
+
     mes_result = pd.read_sql(f"SELECT id_mes FROM mes WHERE nombre_mes = '{mes}'", engine)
-
     if mes_result.empty:
         raise ValueError(f"❌ Mes '{mes}' no encontrado en la tabla 'mes'.")
-
     id_mes = mes_result.iloc[0]['id_mes']
 
     # Verificar existencia del período
     query = f"""
         SELECT id_periodo FROM periodo_carga
-        WHERE id_anio = {id_anio} AND id_mes = {id_mes} AND texto_extraido = '{texto_extraido}'
+        WHERE id_anio = {id_anio} AND id_mes = {id_mes} AND UPPER(texto_extraido) = '{texto_extraido}'
     """
     existente = pd.read_sql(query, engine)
 
     if not existente.empty:
         id_periodo = existente.iloc[0]['id_periodo']
-        print(f"ℹ️ Período ya existente: {mes} {año} → id_periodo = {id_periodo}")
+        print(f"ℹ️ Período ya existente: {mes} {año} ({texto_extraido}) → id_periodo = {id_periodo}")
     else:
         df_periodo = pd.DataFrame([{
             'id_anio': id_anio,
@@ -79,13 +95,13 @@ for mes in meses_unicos:
         }])
         df_periodo.to_sql('periodo_carga', engine, if_exists='append', index=False)
         id_periodo = pd.read_sql('SELECT MAX(id_periodo) AS id FROM periodo_carga', engine).iloc[0]['id']
-        print(f"🆕 Nuevo período insertado: {mes} {año} → id_periodo = {id_periodo}")
+        print(f"🆕 Nuevo período insertado: {mes} {año} ({texto_extraido}) → id_periodo = {id_periodo}")
 
-    periodos.append({'mes': mes, 'id_periodo': id_periodo})
+    periodos.append({'mes': mes, 'texto_extraido': texto_extraido, 'id_periodo': id_periodo})
 
 # Asignar id_periodo a cada fila
 periodo_map = pd.DataFrame(periodos)
-df = df.merge(periodo_map, on='mes', how='left')
+df = df.merge(periodo_map, on=['mes', 'texto_extraido'], how='left')
 
 # ==============================
 # 3️⃣ Normalizar columnas clave
@@ -174,7 +190,6 @@ if not df_plan_filtrado.empty:
         print(f"❌ Error al insertar en 'plan': {e}")
 else:
     print("⚠️ Todos los registros ya existen en 'plan'.")
-
 # ==============================
 # 8️⃣ Mapear auxiliares para cliente y cliente_plan_info
 # ==============================
@@ -294,3 +309,44 @@ if not df_plan_info.empty:
         print(f"❌ Error al insertar en 'cliente_plan_info': {e}")
 else:
     print("⚠️ No hay registros válidos para insertar en 'cliente_plan_info'.")
+
+# 13️⃣ Actualizar nombre_base en periodo_carga según texto_extraido
+# ==============================
+try:
+    meses = {
+        "ene": "01", "feb": "02", "mar": "03", "abr": "04",
+        "may": "05", "jun": "06", "jul": "07", "ago": "08",
+        "sep": "09", "oct": "10", "nov": "11", "dic": "12"
+    }
+
+    with engine.begin() as conn:
+        result = conn.execute(text("SELECT DISTINCT texto_extraido FROM periodo_carga WHERE texto_extraido IS NOT NULL"))
+        texto_list = [r[0] for r in result]
+
+        for texto in texto_list:
+            if texto:
+                texto_limpio = str(texto).strip().lower()
+
+                # Buscar abreviatura del mes y reemplazar por número
+                for mes_abv, mes_nro in meses.items():
+                    if mes_abv in texto_limpio:
+                        texto_limpio = texto_limpio.replace(mes_abv, mes_nro)
+                        break
+
+                # Crear el nombre_base en formato numérico
+                nombre_base = f"b_pos_{texto_limpio}"
+
+                conn.execute(
+                    text("""
+                        UPDATE periodo_carga
+                        SET nombre_base = :nombre
+                        WHERE texto_extraido = :texto
+                    """),
+                    {"nombre": nombre_base, "texto": texto}
+                )
+                print(f"✅ Actualizado: texto_extraido={texto} → nombre_base={nombre_base}")
+
+    print("✅ Todos los nombres_base fueron actualizados correctamente con formato numérico.")
+
+except Exception as e:
+    print(f"❌ Error actualizando nombre_base: {e}")

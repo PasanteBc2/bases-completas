@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
 from openpyxl import load_workbook 
@@ -10,7 +10,8 @@ import sys
 import unicodedata 
 import re
 import logging
-import cargarpos 
+import cargacompletapos 
+
 # Logging (salida consola)
 # ---------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -34,8 +35,6 @@ except OperationalError as e:
     logging.exception("❌ Error de conexión a PostgreSQL.")
     raise SystemExit(e)
 
-
-
 # ==============================
 # Función para quitar negrita
 # ==============================
@@ -51,26 +50,31 @@ def quitar_negrita_excel(ruta_archivo):
         raise
 
 # ==============================
-# 2️⃣ Buscar último Excel o CSV
+# 2️⃣ Seleccionar archivo manualmente (explorador de archivos)
 # ==============================
-carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases pospago'
+import tkinter as tk
+from tkinter import filedialog
 
-archivos_excel = [
-    f for f in glob.glob(os.path.join(carpeta_base, "*.xlsx")) +
-        glob.glob(os.path.join(carpeta_base, "*.csv"))
-    if "_con_anio_mes" not in f and "_incompletos" not in f
-]
+root = tk.Tk()
+root.withdraw()  # Oculta la ventana principal de Tkinter
 
-if not archivos_excel:
-    logging.error("❌ No se encontró ningún archivo Excel o CSV original en la carpeta.")
-    raise FileNotFoundError("No se encontró ningún archivo Excel o CSV original en la carpeta.")
+ruta_base = filedialog.askopenfilename(
+    title="Selecciona el archivo Excel o CSV a procesar",
+    filetypes=[("Archivos Excel o CSV", "*.xlsx *.csv")]
+)
 
-ruta_base = max(archivos_excel, key=os.path.getmtime)
-logging.info(f"📥 Procesando archivo: {ruta_base}")
+if not ruta_base:
+    logging.error("❌ No se seleccionó ningún archivo. Proceso cancelado.")
+    raise SystemExit("No se seleccionó ningún archivo.")
 
-carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases pospago'
-# Supongamos que ya generaste CORRECTA_*.xlsx
-ruta_copia = os.path.join(carpeta_base, f"CORRECTA_{datetime.today().month}.xlsx")
+logging.info(f"📥 Procesando archivo seleccionado: {ruta_base}")
+
+# ✅ Guardar con el mismo nombre del archivo original, pero con prefijo copia-
+carpeta_base = os.path.dirname(ruta_base)
+nombre_original = os.path.splitext(os.path.basename(ruta_base))[0]
+nombre_copia = f"copia-{nombre_original}.xlsx"
+ruta_copia = os.path.join(carpeta_base, nombre_copia)
+
 
 # ==============================
 # 3️⃣ Leer archivo
@@ -100,32 +104,17 @@ def limpiar_sin_tildes(texto):
     except Exception:
         pass
 
-    # Normaliza (quita tildes y diacríticos)
     texto = unicodedata.normalize('NFKD', texto)
     texto = texto.encode('ascii', 'ignore').decode('utf-8')
-
-    # Reemplaza la barra "/" por un espacio
     texto = texto.replace('/', ' ')
-
-    # Elimina caracteres no deseados
     texto = re.sub(r'[^A-Za-z0-9Ññ\s.,-]', '', texto)
-
-    # Elimina espacios múltiples
     texto = re.sub(r'\s+', ' ', texto).strip()
-
-    # Convierte a mayúsculas
     texto = texto.upper()
-
     return texto
-
 
 if 'desc_forma_pago' in df.columns:
     df['desc_forma_pago'] = df['desc_forma_pago'].astype(str).apply(limpiar_sin_tildes)
     logging.info("🧹 Columna 'desc_forma_pago' limpiada (sin tildes ni caracteres especiales).")
-
-
-
-
 
 # ==============================
 # 🔟 Año y mes actuales
@@ -140,7 +129,6 @@ mes_actual = meses[fecha_actual.month]
 # ==============================
 # 4️⃣ Validar datos
 # ==============================
-# blindaciones iniciales: columnas esperadas
 for col_exp in ['nombre_completo', 'identificacion', 'celular']:
     if col_exp not in df.columns:
         logging.warning(f"⚠️ Columna esperada '{col_exp}' no encontrada. Se creará vacía.")
@@ -157,7 +145,6 @@ mask_incompletos = mask_incompleto_id_vacia | mask_celular_invalido
 df['celular_norm'] = df['celular'].apply(lambda x: ''.join(filter(str.isdigit, x)))
 duplicados_cel = df[df.duplicated('celular_norm', keep=False) & (df['celular_norm'] != '')].copy()
 
-# ⚠️ Si hay errores, crear Excel y detener
 if mask_incompletos.any() or not duplicados_cel.empty: 
     try:
         nombre_archivo = f"INCORRECTA_{mes_actual}.xlsx" 
@@ -191,7 +178,6 @@ for col in df.columns:
         df[col] = df[col].fillna("").astype(str).str.strip()
         df.loc[df[col] == "", col] = "NO REGISTRA"
 
-# --- Completar columnas vacías: institucion_financiera, provincia, ciudad ---
 for col in ['institucion_financiera', 'provincia', 'ciudad']:
     if col not in df.columns:
         df[col] = 'NO REGISTRA'
@@ -199,7 +185,6 @@ for col in ['institucion_financiera', 'provincia', 'ciudad']:
         df[col] = df[col].fillna('').astype(str).str.strip()
         df.loc[df[col] == '', col] = 'NO REGISTRA'
 logging.info(" Columnas 'institucion_financiera', 'provincia' y 'ciudad' completadas con 'NO REGISTRA' si estaban vacías.")
-
 
 mask_nombre_vacio = (df['nombre_completo'].str.strip() == '') & (df['identificacion'].str.strip() != '')
 df.loc[mask_nombre_vacio, 'nombre_completo'] = "NO REGISTRA"
@@ -219,7 +204,7 @@ df['mes'] = mes_actual
 cols = ['año', 'mes', 'texto_extraido'] + [c for c in df.columns if c not in ['año','mes','texto_extraido']]
 df = df[cols]
 
-# ==============================
+# ============================== 
 # 7️⃣ Normalizar celulares
 # ==============================
 def normalizar_celular(c):
@@ -236,10 +221,13 @@ def normalizar_celular(c):
 if "celular" in df.columns:
     df['celular'] = df['celular'].apply(normalizar_celular)
 
+
 # ==============================
 # 8️⃣ Catálogo de planes
 # ==============================
-catalogo_path = os.path.join(carpeta_base, "nuevo", "catalogos bases.xlsx")
+# Buscar el catálogo SIEMPRE en la carpeta original fija
+catalogo_path = r"C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\catalogos bases.xlsx"
+
 if not os.path.exists(catalogo_path):
     logging.warning("⚠️ Catálogo de planes no encontrado en 'nuevo/catalogos bases.xlsx'. Se omitirá relleno de descripción.")
     catalogo_df = pd.DataFrame()
@@ -275,29 +263,39 @@ if 'id_plan' in df.columns and catalogo_dict:
         logging.exception("❌ Error rellenando descripciones de plan. Se continuará sin esa información.")
 
 # ==============================
-# 9️⃣ Guardar base correcta
+# 9️⃣ Guardar base correcta con nombre COPIA-nombre_original
 # ==============================
 try:
-    nombre_archivo = f"CORRECTA_{mes_actual}.xlsx"
-    ruta_copia = os.path.join(carpeta_base, nombre_archivo)
     df.to_excel(ruta_copia, index=False)
     quitar_negrita_excel(ruta_copia)
-    logging.info(f"📂 Base correcta guardada en: {ruta_copia}")
+    logging.info(f"📂 Base correcta guardada como: {ruta_copia}")
     logging.info(f"✅ Total registros válidos: {len(df)}")
 except Exception as e:
-    logging.exception("❌ Error guardando archivo CORRECTA_.")
+    logging.exception("❌ Error guardando archivo COPIA-.")
     raise SystemExit(e)
 
-
-# # ==============================
-# # 🔁 10️⃣ Ejecutar cargarpos.py automáticamente
-# # ==============================
+# ==============================
+# 🔁 10️⃣ Ejecutar cargacompletapos.py automáticamente + registrar nombre_base
+# ==============================
 if os.path.exists(ruta_copia):
-    logging.info("🚀 Ejecutando cargarpos.py con la conexión existente...")
+    logging.info("🚀 Ejecutando cargacompletapos.py con la conexión existente...")
     try:
-        cargarpos.cargar_datos(engine, ruta_copia)  # Pasamos engine y ruta del Excel
-        logging.info("✅ cargarpos.py ejecutado correctamente.")
+        cargacompletapos.cargar_datos(engine, ruta_copia)
+
+        # ✅ Actualizar nombre_base usando id_periodo
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    UPDATE periodo_carga
+                    SET nombre_base = :nombre
+                    WHERE id_periodo = (SELECT MAX(id_periodo) FROM periodo_carga)
+                """),
+                {"nombre": nombre_original}
+            )
+            conn.commit()
+        logging.info(f"🗄️ Nombre de la base '{nombre_original}' guardado en periodo_carga.nombre_base.")
+        logging.info("✅ cargacompletapos.py ejecutado correctamente.")
     except Exception as e:
-        logging.exception(f"❌ Error ejecutando cargarpos.py: {e}")
+        logging.exception(f"❌ Error ejecutando cargacompletapos.py o insertando nombre_base: {e}")
 else:
-    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpos.py.") 
+    logging.warning("⚠️ No se encontró el archivo COPIA. No se ejecuta cargacompletapos.py.")

@@ -12,24 +12,41 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = Flask(__name__, template_folder='vistas_html')
 
 # ==============================
-# Conexión a la base de datos
+# Conexión a la base de datos BAS
 # ==============================
 usuario = 'postgres'
 contraseña = quote_plus('pasante')
 host = 'localhost'
 puerto = '5432'
-base_datos = 'BAS'
+base_datos_bas = 'BAS'
 
 try:
-    engine = create_engine(
-        f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}',
+    engine_bas = create_engine(
+        f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos_bas}',
         connect_args={"options": "-c client_encoding=UTF8"}
     )
-    with engine.connect() as conn:
+    with engine_bas.connect() as conn:
         conn.execute(text("SELECT 1"))
     logging.info("✅ Conexión exitosa a la base de datos 'BAS'.")
 except Exception as e:
-    logging.error(f"❌ Error al conectar: {e}")
+    logging.error(f"❌ Error al conectar BAS: {e}")
+
+# ==============================
+# Conexión a la base de datos POSPAGO
+# ==============================
+base_datos_pospago = 'pospago'
+
+try:
+    engine_pospago = create_engine(
+        f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos_pospago}',
+        connect_args={"options": "-c client_encoding=UTF8"}
+    )
+    with engine_pospago.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    logging.info("✅ Conexión exitosa a la base de datos 'POSPAGO'.")
+except Exception as e:
+    logging.error(f"❌ Error al conectar POSPAGO: {e}")
+    engine_pospago = None  # Para evitar que rompa la app si no se conecta
 
 # ==============================
 # Página de inicio
@@ -39,7 +56,7 @@ def inicio():
     return render_template('inicio.html')
 
 # ==============================
-# Página de búsqueda
+# Página de búsqueda por cédula/celular (BAS)
 # ==============================
 @app.route('/buscar', methods=['GET', 'POST'])
 def buscar():
@@ -71,9 +88,7 @@ def buscar():
 
         where_clause = " OR ".join(condiciones)
 
-        # ==============================
         # Consulta SQL según tipo
-        # ==============================
         if tipo == '1':
             query = text(f"""
                 SELECT
@@ -113,7 +128,7 @@ def buscar():
             """)
 
         try:
-            df = pd.read_sql(query, engine, params=params)
+            df = pd.read_sql(query, engine_bas, params=params)
         except Exception as e:
             logging.error(f"❌ Error en la consulta SQL: {e}")
             return render_template('index.html', tipo=tipo, mensaje="❌ Error al consultar la base de datos.")
@@ -121,11 +136,8 @@ def buscar():
         if df.empty:
             return render_template('index.html', tipo=tipo, mensaje="❌ No se encontraron registros.", valores_input=valores_input)
 
-        # ==============================
         # Marcar duplicados y ordenar
-        # ==============================
         df['duplicado'] = df.duplicated(subset=['celular'], keep=False)
-
         orden_columnas = ['celular']
         if 'año' in df.columns and 'mes' in df.columns:
             orden_columnas += ['año', 'mes']
@@ -137,7 +149,66 @@ def buscar():
     return render_template('index.html', tipo=tipo)
 
 # ==============================
+# Búsqueda por Ciclo y Año (POSPAGO)
+# ==============================
+@app.route("/buscar_ciclo", methods=["GET", "POST"])
+def buscar_ciclo():
+    resultados = []
+    mensaje = ""
+
+    if engine_pospago is None:
+        mensaje = "❌ No se pudo conectar a la base POSPAGO."
+        return render_template("buscar_ciclo.html", anios=[], ciclos=[], resultados=[], mensaje=mensaje)
+
+    # Traemos años y ciclos desde POSPAGO
+    anios_df = pd.read_sql("SELECT * FROM anio ORDER BY valor", engine_pospago)
+    ciclos_df = pd.read_sql("SELECT DISTINCT id_ciclo FROM cliente_plan_info ORDER BY id_ciclo", engine_pospago)
+
+    if request.method == "POST":
+        id_anio = request.form.get("anio")
+        id_ciclo = request.form.get("ciclo")
+
+        try:
+            # Traemos todos los datos de POSPAGO
+            query = """
+                SELECT 
+                    c.identificacion,
+                    c.celular,
+                    c.nombre_completo,
+                    cp.id_ciclo AS ciclo,
+                    a.valor AS anio
+                FROM cliente c
+                JOIN cliente_plan_info cp ON c.id_cliente = cp.id_cliente
+                JOIN periodo_carga p ON cp.id_periodo = p.id_periodo
+                JOIN anio a ON p.id_anio = a.id_anio
+                ORDER BY a.valor, cp.id_ciclo, c.nombre_completo;
+            """
+            df = pd.read_sql(query, engine_pospago)
+
+            # Filtramos según selección del usuario
+            if id_anio:
+                df = df[df["anio"] == int(id_anio)]
+            if id_ciclo:
+                df = df[df["ciclo"] == int(id_ciclo)]
+
+            resultados = df.to_dict(orient="records")
+            if not resultados:
+                mensaje = "❌ No se encontraron registros para este Año y Ciclo."
+
+        except Exception as e:
+            logging.error(f"❌ Error al consultar POSPAGO: {e}")
+            mensaje = "❌ Ocurrió un error al consultar POSPAGO."
+
+    return render_template(
+        "buscar_ciclo.html",
+        anios=anios_df.to_dict(orient="records"),
+        ciclos=ciclos_df.to_dict(orient="records"),
+        resultados=resultados,
+        mensaje=mensaje
+    )
+
+# ==============================
 # Ejecutar aplicación
 # ==============================
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True, port=5000)

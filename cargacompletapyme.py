@@ -5,11 +5,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 def cargar_datos(engine, ruta_excel):
     """
+     
     Función principal para cargar datos desde Excel a PostgreSQL
-    usando la conexión engine pasada desde posp.py
+    usando la conexión engine pasada desde posp.py 
     """
-    # -----------------------------
-    # 1️⃣ Leer Excel automáticamente 
+    # ----------------------------- 
+    # 1️⃣ Leer Excel automáticamente
     # -----------------------------
     try:
         excel = pd.ExcelFile(ruta_excel)
@@ -20,8 +21,8 @@ def cargar_datos(engine, ruta_excel):
     except Exception as e:
         logging.exception("❌ Error leyendo el Excel.")
         raise
-
-    # -----------------------------
+ 
+    # ----------------------------- 
     # 2️⃣ Normalizar columnas de periodo
     # -----------------------------
     try:
@@ -207,3 +208,4 @@ def cargar_datos(engine, ruta_excel):
     except Exception as e:
         logging.exception("❌ Error inesperado durante la carga. Se aplicó ROLLBACK automático si correspondía.")
         raise
+ 

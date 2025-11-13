@@ -1,11 +1,10 @@
-import pandas as pd
-import glob
 import os
-import sys
+import glob
+import pandas as pd
 from sqlalchemy import create_engine
 
 # ==============================
-# 1️⃣ Conexión a PostgreSQL
+# 1️⃣ Configuración PostgreSQL
 # ==============================
 usuario = 'postgres'
 contraseña = 'pasante'
@@ -13,153 +12,122 @@ host = 'localhost'
 puerto = '5432'
 base_datos = 'tradicional'
 
-connection_string = f'postgresql+psycopg2://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
-engine = create_engine(connection_string)
+engine = create_engine(f'postgresql+psycopg2://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}')
 
 # ==============================
-# 2️⃣ Leer todos los Excel de la carpeta
+# 2️⃣ Carpeta principal
 # ==============================
 carpeta_principal = r'C:\Users\pasante.ti2\Documents\MOVISTAR\TRADICIONAL'
-rutas_excel = glob.glob(os.path.join(carpeta_principal, '**', '*.xlsx'), recursive=True)
+archivos_excel = glob.glob(os.path.join(carpeta_principal, '**', '*.xlsx'), recursive=True)
 
-if not rutas_excel:
-    sys.exit("❌ No se encontraron archivos Excel en la carpeta indicada.")
-
-df_list = []
+archivos_excel = [f for f in archivos_excel if not os.path.basename(f).startswith('~$')]
+print(f"Se encontraron {len(archivos_excel)} archivos Excel válidos")
 
 # ==============================
-# 3️⃣ Leer hojas y normalizar columnas
+# 3️⃣ Columnas necesarias
 # ==============================
-for ruta_excel in rutas_excel:
-    nombre_archivo = os.path.basename(ruta_excel)
-    if nombre_archivo.startswith('~$'):
-        continue
+columnas_necesarias = [
+    'identificacion', 'nombre_completo', 'celular',
+    'provincia', 'operadora_destino', 'deuda_movistar'
+]
 
+# ==============================
+# 4️⃣ Función para normalizar texto
+# ==============================
+def normalizar_string(s):
     try:
-        hojas = pd.read_excel(ruta_excel, sheet_name=None, dtype=str)
+        if pd.isna(s):
+            return ""
+        return str(s).strip().upper()
+    except Exception:
+        return str(s)
 
-        for nombre_hoja, df_hoja in hojas.items():
-            # Normalizar nombres de columnas
-            df_hoja.columns = [str(col).lower().split('_m')[0].strip() for col in df_hoja.columns]
-
-            # Columnas requeridas
-            columnas_requeridas = [
-                'año','mes','texto_extraido','nombre_completo','identificacion',
-                'celular','fecha_baja','dpa_provincia','operadora_destino','deuda_movistar'
-            ]
-            for c in columnas_requeridas:
-                if c not in df_hoja.columns:
-                    df_hoja[c] = None
-
-            # Limpieza de celular
-            df_hoja['celular'] = df_hoja['celular'].astype(str).str.replace(r'\.0$', '', regex=True)
-            df_hoja['celular'] = df_hoja['celular'].apply(
-                lambda x: x if x.startswith('0') else '0'+x if x and x.isdigit() else x
-            )
-
-            # Limpieza de texto
-            for c in ['nombre_completo','identificacion','dpa_provincia','operadora_destino']:
-                df_hoja[c] = df_hoja[c].apply(lambda x: x.strip() if pd.notna(x) else '')
-
-            # Normalizar mes y texto_extraido
-            df_hoja['mes'] = df_hoja['mes'].astype(str).str.strip().str.upper()
-            df_hoja['texto_extraido'] = df_hoja['texto_extraido'].fillna('').astype(str).str.strip()
-
-            df_list.append(df_hoja)
-
+# ==============================
+# 5️⃣ Leer y procesar archivos
+# ==============================
+lista_dfs = []
+for archivo in archivos_excel:
+    print(f"Leyendo archivo: {archivo}")
+    try:
+        df = pd.read_excel(archivo)
+        df.columns = df.columns.str.strip().str.lower()
+        lista_dfs.append(df)
     except Exception as e:
-        print(f"⚠️ Error leyendo {nombre_archivo}: {e}")
+        print(f"Error leyendo {archivo}: {e}")
 
-if not df_list:
-    sys.exit("❌ No se pudo leer ningún Excel correctamente.")
+if not lista_dfs:
+    raise ValueError("No se encontraron datos válidos en los archivos Excel.")
 
-# ==============================
-# 4️⃣ Combinar DataFrames
-# ==============================
-df = pd.concat(df_list, ignore_index=True)
-print(f"📊 Total registros combinados: {len(df)}")
+df_total = pd.concat(lista_dfs, ignore_index=True)
+print("Columnas disponibles:", df_total.columns.tolist())
 
 # ==============================
-# 5️⃣ Normalizar año
+# 6️⃣ Asegurar columna provincia
 # ==============================
-df['año'] = df['año'].fillna('2025').astype(str).str.strip()
+if 'provincia' not in df_total.columns:
+    df_total['provincia'] = "NO REGISTRA"
 
 # ==============================
-# 6️⃣ Obtener IDs de año y mes
+# 7️⃣ Filtrar columnas necesarias
 # ==============================
-anio_db = pd.read_sql('SELECT id_anio, valor FROM anio', engine)
-anio_db['valor'] = anio_db['valor'].astype(str).str.strip()
+columnas_existentes = [c for c in columnas_necesarias if c in df_total.columns]
+df_total = df_total[columnas_existentes]
 
-mes_db = pd.read_sql('SELECT id_mes, nombre_mes FROM mes', engine)
-mes_db['nombre_mes'] = mes_db['nombre_mes'].astype(str).str.strip().str.upper()
-
-df = df.merge(anio_db, left_on='año', right_on='valor', how='left')
-df = df.merge(mes_db, left_on='mes', right_on='nombre_mes', how='left')
+for col in ['nombre_completo', 'provincia', 'operadora_destino']:
+    if col in df_total.columns:
+        df_total[col] = df_total[col].map(normalizar_string)
 
 # ==============================
-# 7️⃣ Insertar periodos únicos
+# 8️⃣ Cargar provincias desde PostgreSQL
 # ==============================
-df['texto_extraido'] = df['texto_extraido'].replace('', None)
-df_periodos = df[['id_anio','id_mes','texto_extraido']].dropna(subset=['texto_extraido']).drop_duplicates()
-df_periodos.to_sql('periodo_carga', engine, if_exists='append', index=False, method='multi')
-print(f"✅ Periodos únicos insertados: {len(df_periodos)}")
+df_provincias_db = pd.read_sql("SELECT * FROM provincia", engine)
+
+# Vincular id_provincia usando nombre
+df_total = df_total.merge(df_provincias_db, left_on='provincia', right_on='nombre_provincia', how='left')
 
 # ==============================
-# 8️⃣ Asignar id_periodo
+# 9️⃣ Preparar clientes
 # ==============================
-df_periodos_db = pd.read_sql('SELECT * FROM periodo_carga', engine)
-periodo_map = df_periodos_db.set_index(['id_anio','id_mes','texto_extraido'])['id_periodo'].to_dict()
-df['id_periodo'] = df.apply(lambda r: periodo_map.get((r['id_anio'], r['id_mes'], r['texto_extraido'])), axis=1)
-
-# ==============================
-# 9️⃣ Provincias
-# ==============================
-prov_db = pd.read_sql('SELECT id_provincia, nombre_provincia FROM provincia', engine)
-prov_excel = df['dpa_provincia'].str.strip().str.upper().dropna().unique()
-prov_nuevas = [p for p in prov_excel if p and p not in prov_db['nombre_provincia'].str.upper().values]
-
-if prov_nuevas:
-    df_prov_nuevas = pd.DataFrame({'nombre_provincia': prov_nuevas})
-    df_prov_nuevas.to_sql('provincia', engine, if_exists='append', index=False, method='multi')
-
-prov_db = pd.read_sql('SELECT id_provincia, nombre_provincia FROM provincia', engine)
-prov_map = dict(zip(prov_db['nombre_provincia'].str.upper(), prov_db['id_provincia']))
-df['id_provincia'] = df['dpa_provincia'].str.strip().str.upper().map(prov_map)
+df_clientes = df_total.copy()
+df_clientes['id_cliente'] = range(1, len(df_clientes)+1)
+df_clientes = df_clientes[['id_cliente', 'identificacion', 'nombre_completo', 'celular',
+                           'id_provincia', 'operadora_destino', 'deuda_movistar']]
 
 # ==============================
-# 🔟 Insertar clientes (sin duplicados)
+# 🔟 Crear periodos simulados
 # ==============================
-df['fecha_baja'] = pd.to_datetime(df['fecha_baja'], errors='coerce').dt.date
-df_cliente = df[['identificacion','nombre_completo','celular','id_provincia',
-                 'operadora_destino','deuda_movistar','fecha_baja']].drop_duplicates(subset=['identificacion'])
-
-df_clientes_db = pd.read_sql('SELECT id_cliente, identificacion FROM cliente', engine)
-clientes_nuevos = df_cliente[~df_cliente['identificacion'].isin(df_clientes_db['identificacion'])]
-
-if not clientes_nuevos.empty:
-    clientes_nuevos.to_sql('cliente', engine, if_exists='append', index=False, method='multi')
-    print(f"✅ Clientes nuevos insertados: {len(clientes_nuevos)}")
-else:
-    print("✅ No hay clientes nuevos para insertar")
+df_total['periodo_texto'] = df_total.index.to_series().apply(lambda x: f"PERIODO_{x+1}")
+df_periodos = df_total[['periodo_texto']].drop_duplicates().reset_index(drop=True)
+df_periodos['id_periodo'] = range(1, len(df_periodos)+1)
 
 # ==============================
-# 1️⃣1️⃣ Insertar cliente_plan_info
+# 1️⃣1️⃣ Cliente plan info
 # ==============================
-df_clientes_db = pd.read_sql('SELECT id_cliente, identificacion FROM cliente', engine)
-df['id_cliente'] = df['identificacion'].map(dict(zip(df_clientes_db['identificacion'], df_clientes_db['id_cliente'])))
-
-df_plan_info = df[['id_cliente','id_periodo']].dropna().drop_duplicates()
-if not df_plan_info.empty:
-    df_plan_info.to_sql('cliente_plan_info', engine, if_exists='append', index=False, method='multi')
-    print(f"✅ Cliente_plan_info insertados: {len(df_plan_info)}")
-else:
-    print("⚠️ No hay registros válidos para insertar en cliente_plan_info")
+df_cliente_plan_info = df_total.merge(
+    df_clientes[['id_cliente', 'identificacion']],
+    on='identificacion', how='left', suffixes=('', '_cliente')
+)
+df_cliente_plan_info = df_cliente_plan_info.merge(df_periodos, on='periodo_texto', how='left')
+df_cliente_plan_info['id_cliente_plan_info'] = range(1, len(df_cliente_plan_info)+1)
+df_cliente_plan_info = df_cliente_plan_info[['id_cliente_plan_info', 'id_cliente', 'id_periodo']]
 
 # ==============================
-# 1️⃣2️⃣ Resumen final
+# 🧹 Limpiar columnas duplicadas
 # ==============================
-resumen_mes = df.groupby('mes').size().reset_index(name='registros')
-print("\n📊 Registros por mes:")
-print(resumen_mes)
+def limpiar_columnas(df):
+    df.columns = df.columns.str.replace(r'__\d+$', '', regex=True)
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
 
-print("\n🎉 ¡Carga completa en PostgreSQL con todas las relaciones correctas!")
+df_clientes = limpiar_columnas(df_clientes)
+df_periodos = limpiar_columnas(df_periodos)
+df_cliente_plan_info = limpiar_columnas(df_cliente_plan_info)
+
+# ==============================
+# 1️⃣2️⃣ Cargar a PostgreSQL
+# ==============================
+df_clientes.to_sql('cliente', engine, if_exists='append', index=False)
+df_periodos.to_sql('periodo_carga', engine, if_exists='append', index=False)
+df_cliente_plan_info.to_sql('cliente_plan_info', engine, if_exists='append', index=False)
+
+print("✅ Carga completada correctamente en PostgreSQL.")

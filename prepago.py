@@ -8,7 +8,7 @@ import glob
 import os
 import sys
 import logging
-import cargarpre  # Script de carga
+import cargacompletapre  # Script de carga
 
 # Logging (salida consola)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -47,22 +47,30 @@ def quitar_negrita_excel(ruta_archivo):
         raise
 
 # ==============================
-# 2️⃣ Detectar último Excel en carpeta
+# 2️⃣ Seleccionar archivo manualmente (explorador de archivos)
 # ==============================
-carpeta_base = r'C:\Users\pasante.ti2\Desktop\bases prepago'
+import tkinter as tk
+from tkinter import filedialog
 
-archivos_excel = [
-    f for f in glob.glob(os.path.join(carpeta_base, "*.xlsx"))
-    if "_con_anio_mes" not in f and "_incompletos" not in f
-]
+root = tk.Tk()
+root.withdraw()  # Oculta la ventana principal de Tkinter
 
-if not archivos_excel:
-    logging.error("❌ No se encontró ningún archivo Excel original en la carpeta.")
-    raise FileNotFoundError("No se encontró ningún archivo Excel original en la carpeta.")
+ruta_base = filedialog.askopenfilename(
+    title="Selecciona el archivo Excel o CSV a procesar",
+    filetypes=[("Archivos Excel o CSV", "*.xlsx *.csv")]
+)
 
-ruta_base = max(archivos_excel, key=os.path.getmtime)
-logging.info(f"📥 Procesando archivo: {ruta_base}")
+if not ruta_base:
+    logging.error("❌ No se seleccionó ningún archivo. Proceso cancelado.")
+    raise SystemExit("No se seleccionó ningún archivo.")
 
+logging.info(f"📥 Procesando archivo seleccionado: {ruta_base}")
+
+# ✅ Guardar con el mismo nombre del archivo original, pero con prefijo copia-
+carpeta_base = os.path.dirname(ruta_base)
+nombre_original = os.path.splitext(os.path.basename(ruta_base))[0]
+nombre_copia = f"copia-{nombre_original}.xlsx"
+ruta_copia = os.path.join(carpeta_base, nombre_copia)
 # ==============================
 # 3️⃣ Leer archivo
 # ==============================
@@ -145,24 +153,48 @@ def normalizar_celular(c):
 df['celular'] = df['celular'].apply(normalizar_celular)
 
 # ==============================
-# 7️⃣ Guardar CORRECTA
+# 7️⃣ Guardar COPIA con nombre original
 # ==============================
-nombre_archivo = f"CORRECTA_{mes_actual}.xlsx"
+nombre_original = os.path.basename(ruta_base)  # obtiene el nombre original del archivo
+nombre_archivo = f"copia-{nombre_original}"    # crea el nuevo nombre con prefijo "copia-"
 ruta_correcta = os.path.join(carpeta_base, nombre_archivo)
+
 df.to_excel(ruta_correcta, index=False)
 quitar_negrita_excel(ruta_correcta)
-logging.info(f"📂 Base correcta guardada en: {ruta_correcta}")
+logging.info(f"📂 Base copiada guardada en: {ruta_correcta}")
 logging.info(f"✅ Total registros válidos: {len(df)}")
+ 
 
 # ==============================
-# 8️⃣ Ejecutar cargarpre.py usando la misma conexión
+# 8️⃣ Ejecutar cargacompletapre.py y actualizar nombre_base
 # ==============================
+from sqlalchemy import text
+
 if os.path.exists(ruta_correcta):
-    logging.info("🚀 Ejecutando cargarpre.py con la conexión existente...")
+    logging.info("🚀 Ejecutando cargacompletapre.py con la conexión existente...")
+
+    # Obtener el nombre original SIN el prefijo "copia-" ni extensión
+    nombre_sin_prefijo = os.path.splitext(nombre_original.replace("copia-", ""))[0]
+
     try:
-        cargarpre.run_cargarpre(engine, ruta_correcta)
-        logging.info("✅ cargarpre.py ejecutado correctamente.")
+        cargacompletapre.run_cargarpre(engine, ruta_correcta)
+        logging.info("✅ cargacompletapre.py ejecutado correctamente.")
+
+        # 🔄 Actualizar el campo nombre_base en la tabla periodo_carga
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    UPDATE periodo_carga
+                    SET nombre_base = :nombre
+                    WHERE id_periodo = (SELECT MAX(id_periodo) FROM periodo_carga)
+                """),
+                {"nombre": nombre_sin_prefijo}
+            )
+            conn.commit()
+        logging.info(f"🆗 nombre_base actualizado con '{nombre_sin_prefijo}' en periodo_carga.")
+
     except Exception as e:
-        logging.exception(f"❌ Error ejecutando cargarpre.py: {e}")
+        logging.exception(f"❌ Error ejecutando cargarpre.py o actualizando nombre_base: {e}")
+
 else:
-    logging.warning("⚠️ No se encontró el archivo CORRECTA. No se ejecuta cargarpre.py.")
+    logging.warning("⚠️ No se encontró el archivo copia. No se ejecuta cargacompletapre.py.")

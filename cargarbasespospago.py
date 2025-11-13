@@ -4,42 +4,60 @@ import glob
 import os
 import sys
 import tkinter as tk
-from tkinter import filedialog
+from sqlalchemy.engine.url import URL
+from sqlalchemy.exc import OperationalError
+import logging
 
 
 # ============================== 
 # 1️⃣ Conexión a PostgreSQL
 # ============================== 
-usuario = 'postgres'
-contraseña = 'pasante'
-host = 'localhost'
-puerto = '5432'
-base_datos = 'pospago'
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
-engine = create_engine(connection_string)
+# ========= Conexión a la base de datos (PostgreSQL) =========
+usuario = "analista"
+contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
+host = "192.168.10.37"
+puerto = 5432
+base_datos = "BcorpPostPrueba"
+
+# usuario = "postgres"
+# contraseña = "12345"   # Déjala tal cual; URL.create la escapa
+# host = "localhost"
+# puerto = 5432
+# base_datos = "BcorpPostPrueba"
+
+# Requiere: pip install psycopg2-binary
+url = URL.create(
+    drivername="postgresql+psycopg2",
+    username=usuario,
+    password=contraseña,
+    host=host,
+    port=puerto,
+    database=base_datos,
+)
+
+try:
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=60,
+    )
+    with engine.connect() as conn:
+        logging.info("✅ Conexión a PostgreSQL OK.")
+except OperationalError as e:
+    logging.exception("❌ Error de conexión a PostgreSQL.")
+    raise SystemExit(e)
 
 # ==============================
 # 2️⃣ Leer Excel (todas las hojas)
 # ==============================
-
-# Ocultar ventana principal de Tkinter
-root = tk.Tk()
-root.withdraw()
-
-# Seleccionar archivo Excel manualmente
-ruta_excel = filedialog.askopenfilename(
-    title="Selecciona el archivo Excel",
-    filetypes=[("Archivos Excel", "*.xlsx *.xls")]
-)
-
-if not ruta_excel:
-    sys.exit("❌ No se seleccionó ningún archivo. Ejecución cancelada.")
-
+ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2023.xlsx'
 try: 
-    print(f"📥 Leyendo archivo Excel seleccionado:\n{ruta_excel}")
-    hojas = pd.read_excel(ruta_excel, sheet_name=None)
-
+    print("📥 Leyendo archivo Excel (todas las hojas)...")
+    hojas = pd.read_excel(ruta_excel, sheet_name=None) 
     df_list = []
     for nombre_hoja, df_hoja in hojas.items():
         df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]
@@ -47,7 +65,7 @@ try:
     df = pd.concat(df_list, ignore_index=True)
     print(f"✅ Total registros cargados de todas las hojas: {len(df)}")
 except Exception as e:
-    sys.exit(f"❌ Error leyendo Excel: {e}") 
+    sys.exit(f"❌ Error leyendo Excel: {e}")
 
 # ==============================
 # 🔧 Normalizar columnas de período

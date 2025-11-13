@@ -28,31 +28,10 @@ except Exception as e:
 # ==============================
 # 2️⃣ Leer todas las hojas del Excel
 # ==============================
-# Ocultar ventana principal de Tkinter
-root = tk.Tk()
-root.withdraw()
-
-# Seleccionar archivo Excel manualmente
-ruta_excel = filedialog.askopenfilename(
-    title="Selecciona el archivo Excel",
-    filetypes=[("Archivos Excel", "*.xlsx *.xls")]
-)
-
-if not ruta_excel:
-    sys.exit("❌ No se seleccionó ningún archivo. Ejecución cancelada.")
-
+ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases prepago\nuevo\base_2023.xlsx'
 try: 
-    print(f"📥 Leyendo archivo Excel seleccionado:\n{ruta_excel}")
-    hojas = pd.read_excel(ruta_excel, sheet_name=None)
-
-    df_list = []
-    for nombre_hoja, df_hoja in hojas.items():
-        df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]
-        df_list.append(df_hoja)
-    df = pd.concat(df_list, ignore_index=True)
-    print(f"✅ Total registros cargados de todas las hojas: {len(df)}")
-except Exception as e:
-    sys.exit(f"❌ Error leyendo Excel: {e}") 
+    print("📥 Leyendo archivo Excel (todas las hojas)...")
+    hojas = pd.read_excel(ruta_excel, sheet_name=None) 
     df_list = []
     for nombre_hoja, df_hoja in hojas.items():
         df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]
@@ -61,7 +40,7 @@ except Exception as e:
     print(f"✅ Total registros cargados de todas las hojas: {len(df)}")
 except Exception as e:
     sys.exit(f"❌ Error leyendo Excel: {e}")
- 
+
 # ==============================
 # 3️⃣ Normalización y limpieza
 # ==============================

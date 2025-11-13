@@ -1,9 +1,11 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, URL
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
 from openpyxl import load_workbook 
 from openpyxl.styles import Font
+import tkinter as tk
+from tkinter import filedialog
 import glob
 import os
 import sys
@@ -12,28 +14,47 @@ import re
 import logging
 import cargacompletapos 
 
-# Logging (salida consola)
-# ---------------------
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ==============================
-# 1️⃣ Conexión a PostgreSQL
-# ==============================
-usuario = 'postgres'
-contraseña = 'pasante'
-host = 'localhost'
-puerto = '5432'
-base_datos = 'pospago'
+# ========= Conexión a la base de datos (PostgreSQL) =========
+usuario = "analista"
+contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
+host = "192.168.10.37"
+puerto = 5432
+base_datos = "BcorpPostPrueba"
 
-connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
+# usuario = "postgres"
+# contraseña = "12345"   # Déjala tal cual; URL.create la escapa
+# host = "localhost"
+# puerto = 5432
+# base_datos = "BcorpPostPrueba"
+
+# Requiere: pip install psycopg2-binary
+url = URL.create(
+    drivername="postgresql+psycopg2",
+    username=usuario,
+    password=contraseña,
+    host=host,
+    port=puerto,
+    database=base_datos,
+)
+
 try:
-    engine = create_engine(connection_string)
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=60,
+    )
     with engine.connect() as conn:
-        pass
-    logging.info("✅ Conexión a PostgreSQL OK.")
+        logging.info("✅ Conexión a PostgreSQL OK.")
 except OperationalError as e:
     logging.exception("❌ Error de conexión a PostgreSQL.")
     raise SystemExit(e)
+
 
 # ==============================
 # Función para quitar negrita
@@ -52,8 +73,7 @@ def quitar_negrita_excel(ruta_archivo):
 # ==============================
 # 2️⃣ Seleccionar archivo manualmente (explorador de archivos)
 # ==============================
-import tkinter as tk
-from tkinter import filedialog
+
 
 root = tk.Tk()
 root.withdraw()  # Oculta la ventana principal de Tkinter

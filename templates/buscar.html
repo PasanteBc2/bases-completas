@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>{% if tipo=='1' %}Consulta por Origen{% elif tipo=='2' %}Consulta por Titularidad{% endif %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+
+<h2 style="text-align:center;">
+{% if tipo=='1' %}🔍 Consulta por Origen{% elif tipo=='2' %}🔍 Consulta por Titularidad{% endif %}
+</h2>
+
+<form method="POST" style="display:flex; justify-content:center; margin-top:20px;">
+    <div style="width:300px;">  <!-- cuadro pequeño centrado -->
+        <label style="display:block; margin-bottom:5px;">
+            {% if tipo=='1' %}
+                Base de origen (pospago, prepago, base_pyme):
+            {% else %}
+                Cédula o celular (Por favor, ingrese cédulas o números para empezar la búsqueda. (max.5)):
+            {% endif %}
+        </label>
+        
+        <textarea name="valores" rows="3" style="width:100%; font-size:14px; resize:vertical;" 
+                  placeholder="{% if tipo=='1' %}Ej: pospago{% else %}Pegue aquí los números...{% endif %}">{{ valores_input or '' }}</textarea>
+    </div>
+</form>
+
+<div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
+    <button form="formulario" type="submit" class="buscar">Buscar</button>
+    <a href="/" class="volver">⬅️ Volver al inicio</a>
+</div>
+
+{% if mensaje %}
+<div class="mensaje" style="text-align:center; margin-top:10px;">{{ mensaje }}</div>
+{% endif %}
+
+{% if resultados %}
+<div style="width:90%; margin:20px auto;">
+    <table>
+    <thead>
+        <tr>
+            {% for col in resultados[0].keys() %}
+            <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {# Contar duplicados #}
+        {% set counts = {} %}
+        {% for fila in resultados %}
+            {% set key = (fila['identificacion'], fila['celular']) %}
+            {% if counts[key] is defined %}
+                {% set _ = counts.update({key: counts[key] + 1}) %}
+            {% else %}
+                {% set _ = counts.update({key: 1}) %}
+            {% endif %}
+        {% endfor %}
+
+        {# Pintar todas las filas que sean duplicadas #}
+        {% for fila in resultados %}
+            {% set key = (fila['identificacion'], fila['celular']) %}
+            {% if counts[key] > 1 %}
+                <tr style="background-color: #ffdcdc;" title="Duplicado">
+            {% else %}
+                <tr>
+            {% endif %}
+                {% for val in fila.values() %}
+                    <td>{{ val }}</td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+
+<div style="text-align:center; margin:15px;">
+    {% if tipo=='1' %}
+        <a href="/descargar_excel_origen" class="volver">💾 Descargar todos los registros de origen</a>
+    {% elif tipo=='2' %}
+        <a href="/descargar_excel_titularidad" class="volver">💾 Descargar todos los registros de titularidad</a>
+    {% endif %}
+</div>
+
+{% endif %}
+
+</body>
+</html>

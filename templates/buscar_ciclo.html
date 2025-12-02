@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Buscar por Ciclo - Pospago</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+
+<h2>🔍 Buscar por Ciclo (POSPAGO)</h2>
+
+<form method="POST">
+    <div class="horizontal-selects">
+        <div>
+            <label>Seleccione Año(s):</label><br>
+            {% for a in años %}
+            <label style="display:inline-block; margin:0 10px;">
+                <input type="checkbox" name="anio" value="{{ a }}"
+                {% if año_sel and (a|string in año_sel) %}checked{% endif %}>
+                {{ a }}
+            </label>
+            {% endfor %}
+            <p style="font-size:12px; color:#444">* Haga clic para seleccionar varios años</p>
+        </div>
+
+        <div>
+            <label>Seleccione Ciclo:</label><br>
+            <select name="ciclo" required>
+                <option value="">-- Seleccione Ciclo --</option>
+                {% for c in ciclos %}
+                    <option value="{{ c }}" {% if ciclo_sel == c|string %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <br><br>
+    <div style="display:flex; gap:10px; justify-content:center;">
+        <button type="submit" class="buscar">Buscar</button>
+        <a href="/" class="volver">⬅️ Volver al inicio</a>
+    </div>
+</form>
+
+
+
+{% if mensaje %}
+<div class="mensaje">{{ mensaje }}</div>
+{% endif %}
+
+{% if resultados %}
+<div style="width:90%; margin:20px auto;">
+    <table>
+        <thead>
+            <tr>
+                {% for col in resultados[0].keys() %}
+                <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in resultados %}
+            <tr>
+                {% for val in fila.values() %}
+                <td>{{ val }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if resultados %}
+<a href="#" id="descargar" class="boton-flotante">
+    📥 Descargar Excel
+</a>
+{% endif %}
+
+<script>
+document.getElementById("descargar").addEventListener("click", function(e){
+    e.preventDefault();
+
+    // Tomar todos los checkboxes marcados
+    const anios = Array.from(document.querySelectorAll("input[name='anio']:checked"))
+                       .map(cb => cb.value);
+    const ciclo = document.querySelector("select[name='ciclo']").value;
+
+    if(!anios.length || !ciclo){
+        alert("Seleccione al menos un año y un ciclo");
+        return;
+    }
+
+    // Crear URL con todos los años
+    const url = `/descargar_excel?${anios.map(a => "anio="+a).join("&")}&ciclo=${ciclo}`;
+    window.location.href = url;
+});
+</script>
+
+
+
+</body>
+</html>

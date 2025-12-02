@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Consultas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+<header>Sistema de Consultas</header>
+<main>
+    <h1>Consultas</h1>
+    <p>Selecciona el tipo de búsqueda que deseas realizar</p>
+    <div class="grid">
+        <!-- Consulta por Origen -->
+        <div class="card" onclick="window.location.href='/buscar?tipo=1'">
+            <div class="icon">📊</div>
+            <div class="title">Consulta por Origen</div>
+            <div class="desc">Accede a los datos según la base de origen</div>
+        </div>
+
+        <!-- Consulta por Titularidad -->
+        <div class="card" onclick="window.location.href='/buscar?tipo=2'">
+            <div class="icon">📱</div>
+            <div class="title">Consulta por Titularidad</div>
+            <div class="desc">Búsqueda rápida por cédula o celular</div>
+        </div>
+
+        <!-- Buscar por Ciclo-Pospago -->
+        <div class="card" onclick="window.location.href='/buscar_ciclo'">
+            <div class="icon">🗓️</div>
+            <div class="title">Buscar por Ciclo-Pospago</div>
+            <div class="desc">Filtra clientes por ciclo y año</div>
+        </div>
+    </div>
+</main>
+<footer>© 2025 - Panel de Consultas</footer>
+<script>
+const colors = ['rgba(240,182,193,0.15)', 'rgba(255,192,203,0.15)', 'rgba(255,218,225,0.1)'];
+for (let i = 0; i < 25; i++){
+    const b = document.createElement("div");
+    b.classList.add("bubble");
+    const size = Math.random()*50 + 20;
+    b.style.width = b.style.height = size+"px";
+    b.style.left = Math.random()*100+"vw";
+    b.style.background = colors[Math.floor(Math.random()*colors.length)];
+    b.style.animationDuration = 12 + Math.random()*12+"s";
+    b.style.animationDelay = Math.random()*5+"s";
+    document.body.appendChild(b);
+}
+const header = document.querySelector("header");
+window.addEventListener("scroll", ()=> {
+    if(window.scrollY>20){
+        header.style.boxShadow="0 25px 50px rgba(0,0,0,0.2)";
+        header.style.transform="scale(1.01)";
+    } else {
+        header.style.boxShadow="0 8px 25px rgba(0,0,0,0.15)";
+        header.style.transform="scale(1)";
+    }
+});
+</script>
+</body>
+</html>

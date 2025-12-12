@@ -4,31 +4,54 @@ from sqlalchemy.exc import SQLAlchemyError, OperationalError  # Manejar errores 
 import sys  # Interactuacon el sistema (por ejemplo, cerrar el programa o leer argumentos externos)
 import tkinter as tk  # Interfaz gráfica para seleccionar archivos
 from tkinter import filedialog # Diálogo para seleccionar archivos
+from sqlalchemy.engine import URL  # Construir URLs de conexión a bases de datos
+import logging  # Registro de eventos para depuración y monitoreo
 
 # ==============================
 # 1️⃣ Conexión segura a PostgreSQL
 # ==============================
-usuario = 'postgres'
-contraseña = 'pasante'
-host = 'localhost'
-puerto = '5432'  
-base_datos = 'prepago'
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
+# ========= Conexión a la base de datos (PostgreSQL) =========
+usuario = "analista"
+contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
+host = "192.168.10.116"
+puerto = 5432
+base_datos = "BcorpPrePrueba"
+
+# usuario = "postgres"
+# contraseña = "12345"   # Déjala tal cual; URL.create la escapa
+# host = "localhost"
+# puerto = 5432
+# base_datos = "BcorpPostPrueba"
+
+# Requiere: pip install psycopg2-binary
+url = URL.create(
+    drivername="postgresql+psycopg2",
+    username=usuario,
+    password=contraseña,
+    host=host,
+    port=puerto,
+    database=base_datos,
+)
 
 try:
-    engine = create_engine(connection_string)
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=60,
+    )
     with engine.connect() as conn:
-        print("✅ Conexión a PostgreSQL establecida correctamente.")
+        logging.info("✅ Conexión a PostgreSQL OK.")
 except OperationalError as e:
-    sys.exit(f"❌ No se pudo conectar a la base de datos: {e}")
-except Exception as e:
-    sys.exit(f"⚠️ Error inesperado al conectar a la base de datos: {e}")
-
-# ==============================
+    logging.exception("❌ Error de conexión a PostgreSQL.")
+    raise SystemExit(e)
+# ============================== 
 # 2️⃣ Leer todas las hojas del Excel
 # ==============================
-ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases prepago\nuevo\base_2023.xlsx'
+ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases prepago\nuevo\base_pre_2025.xlsx'
 try: 
     print("📥 Leyendo archivo Excel (todas las hojas)...")
     hojas = pd.read_excel(ruta_excel, sheet_name=None) 

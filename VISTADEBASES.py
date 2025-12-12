@@ -1,8 +1,8 @@
-import tkinter as tk
-from tkinter import messagebox
-import subprocess
-import os
-import sys
+import tkinter as tk  # Interfaz gráfica
+from tkinter import messagebox  # Mensajes emergentes
+import subprocess  # Ejecutar scripts
+import os  # Manejo de rutas
+import sys  # Manejo de sistema
 
 # ======================================
 # Diccionario de scripts
@@ -10,17 +10,32 @@ import sys
 scripts_objetivo = {
     "Pospago": "pospago.py",
     "Prepago": "prepago.py",
-    "Pyme": "pyme.py"
+    "Pyme": "pyme.py",
+
+    # === MOVISTAR ===
+    "Movistar_Migracion": "VIS-MIG.py",
+    "Movistar_Tradicional": "VIS-TRAD.py",
+    "Movistar_Digital": "VIS-DIG.py"
 }
 
 # ======================================
-# Buscar script en subcarpetas
+# Buscar script (con ruta fija de Movistar)
 # ======================================
 def buscar_script(nombre_script):
+
+    movistar_path = r"C:\Users\pasante.ti2\Desktop\cargarBases-20250917T075622Z-1-001\Bases.Movi"
+
+    # 1️⃣ Buscar primero en MOVISTAR
+    for root, _, files in os.walk(movistar_path):
+        if nombre_script in files:
+            return os.path.join(root, nombre_script)
+
+    # 2️⃣ Buscar en la carpeta normal del programa
     base_dir = os.path.dirname(os.path.abspath(__file__))
     for root, _, files in os.walk(base_dir):
         if nombre_script in files:
             return os.path.join(root, nombre_script)
+
     return None
 
 # ======================================
@@ -31,7 +46,7 @@ def ejecutar_script(nombre_logico):
     ruta = buscar_script(nombre_script)
 
     if not ruta:
-        messagebox.showerror("❌ Error", f"No se encontró '{nombre_script}' en:\n{os.path.dirname(os.path.abspath(__file__))}")
+        messagebox.showerror("❌ Error", f"No se encontró '{nombre_script}'.")
         return
 
     try:
@@ -42,6 +57,14 @@ def ejecutar_script(nombre_logico):
         messagebox.showerror("⚠️ Error", f"Ocurrió un error ejecutando {nombre_script}\n\n{e}")
 
 # ======================================
+# Función volver al menú
+# ======================================
+def volver_menu():
+    frame.place_forget()
+    movistar_frame.place_forget()
+    menu_frame.place(relx=0.5, rely=0.5, anchor="center", width=335, height=335)
+
+# ======================================
 # Ventana principal
 # ======================================
 ventana = tk.Tk()
@@ -49,11 +72,8 @@ ventana.title("🚀 Cargador de Bases")
 ventana.geometry("440x420")
 ventana.resizable(False, False)
 
-# Fondo degradado
 canvas = tk.Canvas(ventana, width=440, height=420, highlightthickness=0)
 canvas.pack(fill="both", expand=True)
-
-# Crear degradado suave
 for i in range(420):
     r = int(255 - (i / 4))
     g = int(255 - (i / 6))
@@ -62,88 +82,97 @@ for i in range(420):
     canvas.create_line(0, i, 440, i, fill=color)
 
 # ======================================
-# Frame central con sombra
+# Menú principal
 # ======================================
-shadow = tk.Frame(ventana, bg="#6B0B7B")
-shadow.place(relx=0.5, rely=0.5, anchor="center", width=340, height=340)
+menu_frame = tk.Frame(ventana, bg="#FDFFDE")
+menu_frame.place(relx=0.5, rely=0.5, anchor="center", width=335, height=335)
 
+tk.Label(menu_frame, text="🚀 CARGADOR DE BASES", font=("Segoe UI Black", 15),
+         fg="#AF3583", bg="#FDFFDE").pack(pady=(40, 10))
+
+tk.Label(menu_frame, text="Seleccione proveedor:",
+         font=("Segoe UI", 11), fg="#320773", bg="#FDFFDE").pack(pady=(0, 20))
+
+tk.Button(menu_frame, text="Proveedor", font=("Segoe UI Semibold", 13),
+          bg="#8CEBE6", fg="black", height=2, relief="flat",
+          command=lambda: mostrar_proveedor()).pack(pady=10, fill="x", padx=40)
+
+tk.Button(menu_frame, text="Movistar", font=("Segoe UI Semibold", 13),
+          bg="#C59FE9", fg="black", height=2, relief="flat",
+          command=lambda: mostrar_movistar()).pack(pady=10, fill="x", padx=40)
+
+# ======================================
+# Frame Proveedor
+# ======================================
 frame = tk.Frame(ventana, bg="#FDFFDE", bd=0, relief="flat", highlightthickness=0)
-frame.place(relx=0.5, rely=0.5, anchor="center", width=335, height=335)
 
-# Bordes redondeados
-frame.config(highlightbackground="#C04BDB", highlightthickness=1)
+def mostrar_proveedor():
+    menu_frame.place_forget()
+    movistar_frame.place_forget()
+    frame.place(relx=0.5, rely=0.5, anchor="center", width=335, height=335)
 
-# ======================================
-# Título con diseño
-# ======================================
-titulo = tk.Label(
-    frame,
-    text="🚀 CARGADOR DE BASES",
-    font=("Segoe UI Black", 15),
-    fg="#AF3583",
-    bg="#FDFFDE"
-)
-titulo.pack(pady=(20, 5))
+tk.Label(frame, text="🚀 CARGADOR DE BASES", font=("Segoe UI Black", 15),
+         fg="#AF3583", bg="#FDFFDE").pack(pady=(20, 5))
 
-subtitulo = tk.Label(
-    frame,
-    text="Seleccione el tipo de carga:",
-    font=("Segoe UI", 10),
-    fg="#320773",
-    bg="#FDFFDE"
-)
-subtitulo.pack(pady=(0, 15))
+tk.Label(frame, text="Seleccione el tipo de carga:",
+         font=("Segoe UI", 10), fg="#320773", bg="#FDFFDE").pack(pady=(0, 15))
 
-# ======================================
-# Estilo de botones con íconos
-# ======================================
 def crear_boton(texto, color, icono, accion):
-    contenedor = tk.Frame(frame, bg="#000000")
+    contenedor = tk.Frame(frame, bg="#FDFFDE")
     contenedor.pack(pady=8, fill="x", padx=25)
-
     boton = tk.Button(
         contenedor,
         text=f"{icono}  {texto}",
         font=("Segoe UI Semibold", 13),
         bg=color,
         fg="BLACK",
-        activebackground="#2C2C2C",
-        activeforeground="white",
         relief="flat",
-        bd=0,
         height=2,
-        cursor="hand2",
         command=accion
     )
     boton.pack(fill="x", padx=2, pady=2)
 
-    def on_enter(e): boton.config(bg="#D4C4B6")
-    def on_leave(e): boton.config(bg=color)
-    boton.bind("<Enter>", on_enter)
-    boton.bind("<Leave>", on_leave)
-
-# Botones
 crear_boton("Ejecutar POSPAGO", "#ECFF8C", "📘", lambda: ejecutar_script("Pospago"))
 crear_boton("Ejecutar PREPAGO", "#8CEBE6", "💳", lambda: ejecutar_script("Prepago"))
 crear_boton("Ejecutar PYME", "#C59FE9", "🏢", lambda: ejecutar_script("Pyme"))
 
-# ======================================
-# Línea decorativa
-# ======================================
-canvas_line = tk.Canvas(frame, width=250, height=2, bg="#FFFFFF", highlightthickness=0)
-canvas_line.create_line(0, 2, 250, 2, fill="#FFFA76", width=2)
-canvas_line.pack(pady=20)
+tk.Button(frame, text="🔙 Volver", font=("Segoe UI Semibold", 11),
+          bg="#FFD4D4", fg="black",
+          command=volver_menu).pack(pady=20)
 
 # ======================================
-# Pie de página
+# Frame MOVISTAR
 # ======================================
-footer = tk.Label(
-    frame,
-    text="© 2025 Departamento TI | Sistema Automático",
-    font=("Segoe UI", 9),
-    bg="#FFDEDE",
-    fg="#9E9E9E"
-)
-footer.pack(side="bottom", pady=8)
+movistar_frame = tk.Frame(ventana, bg="#FDFFDE")
+
+def mostrar_movistar():
+    frame.place_forget()
+    menu_frame.place_forget()
+    movistar_frame.place(relx=0.5, rely=0.5, anchor="center", width=335, height=335)
+
+tk.Label(movistar_frame, text="MOVISTAR", font=("Segoe UI Black", 15),
+         fg="#005BAB", bg="#FDFFDE").pack(pady=(20, 10))
+
+tk.Label(movistar_frame, text="Seleccione tipo:",
+         font=("Segoe UI", 11), fg="#320773", bg="#FDFFDE").pack(pady=(0, 20))
+
+tk.Button(movistar_frame, text="Migración", font=("Segoe UI Semibold", 13),
+          bg="#8CEBE6", fg="black", height=2, relief="flat",
+          command=lambda: ejecutar_script("Movistar_Migracion")
+          ).pack(pady=5, fill="x", padx=40)
+
+tk.Button(movistar_frame, text="Tradicional", font=("Segoe UI Semibold", 13),
+          bg="#ECFF8C", fg="black", height=2, relief="flat",
+          command=lambda: ejecutar_script("Movistar_Tradicional")
+          ).pack(pady=5, fill="x", padx=40)
+
+tk.Button(movistar_frame, text="Digital", font=("Segoe UI Semibold", 13),
+          bg="#C59FE9", fg="black", height=2, relief="flat",
+          command=lambda: ejecutar_script("Movistar_Digital")
+          ).pack(pady=5, fill="x", padx=40)
+
+tk.Button(movistar_frame, text="🔙 Volver", font=("Segoe UI Semibold", 11),
+          bg="#FFD4D4", fg="black",
+          command=volver_menu).pack(pady=30)
 
 ventana.mainloop()

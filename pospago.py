@@ -1,18 +1,18 @@
-import pandas as pd
-from sqlalchemy import create_engine, text, URL
-from sqlalchemy.exc import OperationalError
-from datetime import datetime
-from openpyxl import load_workbook 
-from openpyxl.styles import Font
-import tkinter as tk
-from tkinter import filedialog
-import glob
-import os
-import sys
-import unicodedata 
-import re
-import logging
-import cargacompletapos 
+import pandas as pd # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from sqlalchemy import create_engine, text, URL # Requiere: pip install SQLAlchemy
+from sqlalchemy.exc import OperationalError  # Manejador de errores de conexión
+from datetime import datetime # Para manejar fechas y horas 
+from openpyxl import load_workbook # Requiere: pip install openpyxl 
+from openpyxl.styles import Font # Requiere: pip install openpyxl # Para manejar estilos en Excel
+import tkinter as tk # Para el explorador de archivos 
+from tkinter import filedialog # Para el explorador de archivos 
+import glob # Para manejar rutas de archivos
+import os # Para manejar rutas de archivos 
+import sys # Para manejo de sistema y salidas 
+import unicodedata # Para normalización de texto
+import re # Para expresiones regulares
+import logging # Para manejo de logs
+import cargacompletapos # Importar el módulo cargacompletapos.py
 
 
 
@@ -21,15 +21,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # ========= Conexión a la base de datos (PostgreSQL) =========
 usuario = "analista"
 contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
-host = "192.168.10.37"
+host = "192.168.10.116"
 puerto = 5432
 base_datos = "BcorpPostPrueba"
-
-# usuario = "postgres"
-# contraseña = "12345"   # Déjala tal cual; URL.create la escapa
-# host = "localhost"
-# puerto = 5432
-# base_datos = "BcorpPostPrueba"
 
 # Requiere: pip install psycopg2-binary
 url = URL.create(
@@ -55,7 +49,6 @@ except OperationalError as e:
     logging.exception("❌ Error de conexión a PostgreSQL.")
     raise SystemExit(e)
 
-
 # ==============================
 # Función para quitar negrita
 # ==============================
@@ -73,8 +66,6 @@ def quitar_negrita_excel(ruta_archivo):
 # ==============================
 # 2️⃣ Seleccionar archivo manualmente (explorador de archivos)
 # ==============================
-
-
 root = tk.Tk()
 root.withdraw()  # Oculta la ventana principal de Tkinter
 
@@ -90,10 +81,29 @@ if not ruta_base:
 logging.info(f"📥 Procesando archivo seleccionado: {ruta_base}")
 
 # ✅ Guardar con el mismo nombre del archivo original, pero con prefijo copia-
+# ==============================
+# Carpeta donde está el archivo original (usada para INCORRECTOS)
 carpeta_base = os.path.dirname(ruta_base)
+
+escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
+
+# Carpeta general "copias"
+carpeta_general = os.path.join(escritorio, "copias")
+os.makedirs(carpeta_general, exist_ok=True)
+
+# Carpeta específica del tipo
+carpeta_tipo = os.path.join(carpeta_general, "pospago")
+os.makedirs(carpeta_tipo, exist_ok=True)
+
+# Nombre base del archivo original
 nombre_original = os.path.splitext(os.path.basename(ruta_base))[0]
-nombre_copia = f"copia-{nombre_original}.xlsx"
-ruta_copia = os.path.join(carpeta_base, nombre_copia)
+
+# Nombre final de la copia
+nombre_copia = f"copia-{nombre_original}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+# Ruta final donde se guardará la copia
+ruta_copia = os.path.join(carpeta_tipo, nombre_copia)
+
 
 
 # ==============================
@@ -213,7 +223,7 @@ for col in df.columns:
     if "ciclo" in col:
         df[col] = df[col].fillna(0)
 if "tb" in df.columns:
-    df['tb'] = df['tb'].fillna(0)
+    df['tb'] = df['tb'].fillna(0) 
 
 # ==============================
 # 6️⃣ Campos de fecha
@@ -232,7 +242,7 @@ def normalizar_celular(c):
         return ""
     c = str(c).strip().replace(".0", "")
     c = "".join(filter(str.isdigit, c))
-    if len(c) == 9:
+    if len(c) == 9: 
         return "0" + c
     elif len(c) == 8:
         return "09" + c
@@ -285,14 +295,12 @@ if 'id_plan' in df.columns and catalogo_dict:
 # ==============================
 # 9️⃣ Guardar base correcta con nombre COPIA-nombre_original
 # ==============================
-try:
-    df.to_excel(ruta_copia, index=False)
-    quitar_negrita_excel(ruta_copia)
-    logging.info(f"📂 Base correcta guardada como: {ruta_copia}")
-    logging.info(f"✅ Total registros válidos: {len(df)}")
-except Exception as e:
-    logging.exception("❌ Error guardando archivo COPIA-.")
-    raise SystemExit(e)
+df.to_excel(ruta_copia, index=False)
+quitar_negrita_excel(ruta_copia)
+logging.info(f"📂 Base copiada guardada en: {ruta_copia}")
+
+ruta_correcta = ruta_copia  # <<< IMPORTANTE: actualizar para el cargacompletapos
+nombre_archivo = nombre_copia
 
 # ==============================
 # 🔁 10️⃣ Ejecutar cargacompletapos.py automáticamente + registrar nombre_base

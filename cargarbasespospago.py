@@ -1,31 +1,29 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
-import glob
-import os
-import sys
-import tkinter as tk
-from sqlalchemy.engine.url import URL
-from sqlalchemy.exc import OperationalError
-import logging
+import pandas as pd # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from sqlalchemy import create_engine, text # Requiere: pip install sqlalchemy
+import glob # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import os # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import sys # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import tkinter as tk # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from tkinter import filedialog # Requiere: pip install pandas openpyxl sqlalchemy psycop
+from sqlalchemy.engine.url import URL # Requiere: pip install sqlalchemy
+from sqlalchemy.exc import OperationalError # Requiere: pip install sqlalchemy
+import logging # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
 
 
-# ============================== 
+
+
+# ==============================
 # 1️⃣ Conexión a PostgreSQL
-# ============================== 
+# ==============================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ========= Conexión a la base de datos (PostgreSQL) =========
 usuario = "analista"
-contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
+contraseña = "2025Anal1st@"   
 host = "192.168.10.37"
 puerto = 5432
 base_datos = "BcorpPostPrueba"
 
-# usuario = "postgres"
-# contraseña = "12345"   # Déjala tal cual; URL.create la escapa
-# host = "localhost"
-# puerto = 5432
-# base_datos = "BcorpPostPrueba"
 
 # Requiere: pip install psycopg2-binary
 url = URL.create(
@@ -54,12 +52,12 @@ except OperationalError as e:
 # ==============================
 # 2️⃣ Leer Excel (todas las hojas)
 # ==============================
-ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2023.xlsx'
+ruta_excel = r'C:\Users\pasante.ti2\Desktop\bases pospago\nuevo\base_2025.xlsx'
 try: 
     print("📥 Leyendo archivo Excel (todas las hojas)...")
     hojas = pd.read_excel(ruta_excel, sheet_name=None) 
     df_list = []
-    for nombre_hoja, df_hoja in hojas.items():
+    for nombre_hoja, df_hoja in hojas.items(): 
         df_hoja.columns = [col.lower().strip() for col in df_hoja.columns]
         df_list.append(df_hoja)
     df = pd.concat(df_list, ignore_index=True)
@@ -328,6 +326,8 @@ if not df_plan_info.empty:
 else:
     print("⚠️ No hay registros válidos para insertar en 'cliente_plan_info'.")
 
+
+# ==============================
 # 13️⃣ Actualizar nombre_base en periodo_carga según texto_extraido
 # ==============================
 try:
@@ -344,13 +344,11 @@ try:
         for texto in texto_list:
             if texto:
                 texto_limpio = str(texto).strip().lower()
-
                 # Buscar abreviatura del mes y reemplazar por número
                 for mes_abv, mes_nro in meses.items():
                     if mes_abv in texto_limpio:
                         texto_limpio = texto_limpio.replace(mes_abv, mes_nro)
                         break
-
                 # Crear el nombre_base en formato numérico
                 nombre_base = f"b_pos_{texto_limpio}"
 

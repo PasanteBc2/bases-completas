@@ -1,37 +1,51 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
-from datetime import datetime
-from openpyxl import load_workbook 
-from openpyxl.styles import Font
-import glob
-import os
-import sys
-import unicodedata 
-import re
-import logging
-import cargacompletapyme 
+import pandas as pd    # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from sqlalchemy import create_engine, text # Requiere: pip install sqlalchemy
+from sqlalchemy.exc import OperationalError #Requiere: pip install sqlalchemy
+from datetime import datetime # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from openpyxl import load_workbook # Requiere: pip install openpyxl
+from openpyxl.styles import Font # Requiere: pip install openpyxl
+import glob #   Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import os # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import sys # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import unicodedata #    Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import re # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import logging # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import cargacompletapyme #  Archivo local: cargacompletapyme.py
+from sqlalchemy.engine.url import URL # Requiere: pip install sqlalchemy
+import tkinter as tk # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+from tkinter import filedialog # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
 
 # ==========================================
 # 🔧 Configuración de Logging
 # ==========================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ==========================================
-# 1️⃣ Conexión a PostgreSQL
-# ==========================================
-usuario = 'postgres'
-contraseña = 'pasante'
-host = 'localhost'
-puerto = '5432'
-base_datos = 'base_pyme'
+# ========= Conexión a la base de datos (PostgreSQL) =========
+usuario = "analista"
+contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
+host = "192.168.10.116"
+puerto = 5432
+base_datos = "BcorpPymePrueba"
 
-connection_string = f'postgresql://{usuario}:{contraseña}@{host}:{puerto}/{base_datos}'
+url = URL.create(
+    drivername="postgresql+psycopg2",
+    username=usuario,
+    password=contraseña,
+    host=host,
+    port=puerto,
+    database=base_datos,
+)
+
 try:
-    engine = create_engine(connection_string)
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=60,
+    )
     with engine.connect() as conn:
-        pass
-    logging.info("✅ Conexión a PostgreSQL OK.")
+        logging.info("✅ Conexión a PostgreSQL OK.")
 except OperationalError as e:
     logging.exception("❌ Error de conexión a PostgreSQL.")
     raise SystemExit(e)
@@ -53,9 +67,6 @@ def quitar_negrita_excel(ruta_archivo):
 # ==============================
 # 2️⃣ Seleccionar archivo manualmente (explorador de archivos)
 # ==============================
-import tkinter as tk
-from tkinter import filedialog
-
 root = tk.Tk()
 root.withdraw()  # Oculta la ventana principal de Tkinter
 
@@ -72,9 +83,25 @@ logging.info(f"📥 Procesando archivo seleccionado: {ruta_base}")
 
 # ✅ Guardar con el mismo nombre del archivo original, pero con prefijo copia-
 carpeta_base = os.path.dirname(ruta_base)
+
+escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
+
+# Carpeta general "copias"
+carpeta_general = os.path.join(escritorio, "copias")
+os.makedirs(carpeta_general, exist_ok=True)
+
+# Carpeta específica del tipo
+carpeta_tipo = os.path.join(carpeta_general, "pyme")
+os.makedirs(carpeta_tipo, exist_ok=True)
+
+# Nombre base del archivo original
 nombre_original = os.path.splitext(os.path.basename(ruta_base))[0]
-nombre_copia = f"copia-{nombre_original}.xlsx"
-ruta_copia = os.path.join(carpeta_base, nombre_copia)
+
+# Nombre final de la copia
+nombre_copia = f"copia-{nombre_original}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+# Ruta final donde se guardará la copia
+ruta_copia = os.path.join(carpeta_tipo, nombre_copia)
 
 # ==========================================
 # 4️⃣ Leer archivo
@@ -262,14 +289,12 @@ if 'id_plan' in df.columns and catalogo_dict:
 # ==========================================
 # 12️⃣ Guardar base copia-nombreoriginal
 # ==========================================
-try:
-    df.to_excel(ruta_copia, index=False)
-    quitar_negrita_excel(ruta_copia)
-    logging.info(f"📂 Base guardada como: {ruta_copia}")
-    logging.info(f"✅ Total registros válidos: {len(df)}")
-except Exception as e:
-    logging.exception("❌ Error guardando archivo copia-.")
-    raise SystemExit(e)
+df.to_excel(ruta_copia, index=False)
+quitar_negrita_excel(ruta_copia)
+logging.info(f"📂 Base copiada guardada en: {ruta_copia}")
+
+ruta_correcta = ruta_copia  # <<< IMPORTANTE: actualizar para el cargacompletapyme
+nombre_archivo = nombre_copia
 
 # ==========================================
 # 13️⃣ Ejecutar cargacompletapyme y guardar nombre_base

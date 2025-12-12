@@ -1,17 +1,21 @@
-import pandas as pd
-import logging
+import pandas as pd # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import logging # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+import os # Requiere: pip install pandas openpyxl sqlalchemy psycopg2-binary
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# ==========================================
 
 def cargar_datos(engine, ruta_excel):
     """
      
     Función principal para cargar datos desde Excel a PostgreSQL
-    usando la conexión engine pasada desde posp.py 
+    usando la conexión engine pasada desde pyme.py 
     """
     # ----------------------------- 
-    # 1️⃣ Leer Excel automáticamente
+    # 1️⃣ Leer Excel automáticamente 
     # -----------------------------
+    # Leer la primera hoja del archivo Excel
     try:
         excel = pd.ExcelFile(ruta_excel)
         nombre_hoja = excel.sheet_names[0]
@@ -61,17 +65,27 @@ def cargar_datos(engine, ruta_excel):
             id_mes = mes_result.iloc[0]['id_mes']
 
             # Verificar existencia del período
+
             query = f"""
                 SELECT id_periodo 
                 FROM periodo_carga 
-                WHERE id_anio = {id_anio} AND id_mes = {id_mes} AND texto_extraido = '{texto_extraido}'
+                WHERE id_anio = {id_anio} 
+                AND id_mes = {id_mes} 
+                AND texto_extraido = '{texto_extraido}'
+                AND nombre_base = '{os.path.basename(ruta_excel).replace(".xlsx", "")}'
             """
             existente = pd.read_sql(query, engine)
             if not existente.empty:
                 id_periodo = existente.iloc[0]['id_periodo']
                 logging.info(f"ℹ️ Período ya existente: {mes} {año} → id_periodo = {id_periodo}")
             else:
-                df_periodo = pd.DataFrame([{'id_anio': id_anio, 'id_mes': id_mes, 'texto_extraido': texto_extraido}])
+                df_periodo = pd.DataFrame([{
+                'id_anio': id_anio,
+                'id_mes': id_mes,
+                'texto_extraido': texto_extraido,
+                'nombre_base': os.path.basename(ruta_excel).replace(".xlsx", "")
+            }])
+
                 with engine.begin() as conn:
                     df_periodo.to_sql('periodo_carga', conn, if_exists='append', index=False)
                     id_periodo = pd.read_sql('SELECT MAX(id_periodo) AS id FROM periodo_carga', conn).iloc[0]['id']

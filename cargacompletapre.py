@@ -1,10 +1,10 @@
-import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
-import os
-import glob
-import sys
-import traceback
+import pandas as pd # Manejo de datos
+from sqlalchemy import create_engine # Conexión a base de datos
+from sqlalchemy.exc import SQLAlchemyError, OperationalError # Manejo de errores SQL
+import os # Manejo de rutas
+import glob # Manejo de archivos
+import sys # Manejo de sistema
+import traceback    # Manejo de trazas de error
 
 # ==============================
 # Función principal (recibe engine del primer script)
@@ -86,12 +86,31 @@ def run_cargarpre(engine, ruta_excel):
         sys.exit("Error: Algunos registros tienen año o mes inválido.")
 
     # ==============================
-    # 7️⃣ Insertar nuevos periodos
+    # 7️⃣ Insertar nuevos periodos (MODIFICADO)
     # ==============================
-    df_periodos = df[['id_anio','id_mes','texto_extraido']].drop_duplicates()
-    periodos_existentes = leer_sql('SELECT id_anio,id_mes,texto_extraido FROM periodo_carga')
-    df_nuevos_periodos = df_periodos.merge(periodos_existentes, on=['id_anio','id_mes','texto_extraido'], how='left', indicator=True)
-    df_nuevos_periodos = df_nuevos_periodos[df_nuevos_periodos['_merge']=='left_only'].drop(columns=['_merge'])
+
+    # Tomar nombre del archivo sin prefijo copia- ni extensión
+    nombre_base = os.path.splitext(os.path.basename(ruta_excel.replace("copia-", "")))[0]
+
+    df['nombre_base'] = nombre_base  # añadir como columna interna
+
+    # Periodo basado en: año + mes + texto_extraido + nombre_base
+    df_periodos = df[['id_anio', 'id_mes', 'texto_extraido', 'nombre_base']].drop_duplicates()
+
+    # Periodos existentes (ahora incluye nombre_base)
+    periodos_existentes = leer_sql(
+        'SELECT id_anio, id_mes, texto_extraido, nombre_base FROM periodo_carga'
+    )
+
+    # Detectar periodos completamente nuevos
+    df_nuevos_periodos = df_periodos.merge(
+        periodos_existentes,
+        on=['id_anio', 'id_mes', 'texto_extraido', 'nombre_base'],
+        how='left',
+        indicator=True
+    )
+    df_nuevos_periodos = df_nuevos_periodos[df_nuevos_periodos['_merge'] == 'left_only'] \
+        .drop(columns=['_merge'])
 
     if not df_nuevos_periodos.empty:
         print(f"Insertando {len(df_nuevos_periodos)} nuevos periodos...")
@@ -103,8 +122,8 @@ def run_cargarpre(engine, ruta_excel):
         print("No hay nuevos periodos.")
 
     # Refrescar periodo_carga
-    df_periodos_actualizados = leer_sql('SELECT id_periodo,id_anio,id_mes,texto_extraido FROM periodo_carga')
-    df = df.merge(df_periodos_actualizados, on=['id_anio','id_mes','texto_extraido'], how='left')
+    df_periodos_actualizados = leer_sql('SELECT id_periodo,id_anio,id_mes,texto_extraido,nombre_base FROM periodo_carga')
+    df = df.merge(df_periodos_actualizados, on=['id_anio','id_mes','texto_extraido','nombre_base'], how='left')
 
     # ==============================
     # 8️⃣ Insertar clientes
@@ -125,7 +144,7 @@ def run_cargarpre(engine, ruta_excel):
     clientes_nuevos = clientes_totales.tail(n).copy()
 
     df_clientes = df_clientes.reset_index(drop=True)
-    clientes_nuevos = clientes_nuevos.reset_index(drop=True) 
+    clientes_nuevos = clientes_nuevos.reset_index(drop=True)
     df_clientes['idx'] = df_clientes.index
     clientes_nuevos['idx'] = clientes_nuevos.index
 
@@ -143,6 +162,5 @@ def run_cargarpre(engine, ruta_excel):
     try:
         df_stg.to_sql('cliente_plan_info', engine, if_exists='append', index=False)
         print("✅ Carga completa en cliente_plan_info.")
-    except SQLAlchemyError as e: 
+    except SQLAlchemyError as e:
         print(f"Error al insertar en cliente_plan_info: {e}")
-  

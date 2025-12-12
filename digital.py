@@ -15,7 +15,7 @@ usuario = "analista"
 contraseña = "2025Anal1st@"   # Déjala tal cual; URL.create la escapa
 host = "192.168.10.37"
 puerto = 5432
-base_datos = "digital"
+base_datos = "BcorpDigitalPrueba"
 
 
 # Requiere: pip install psycopg2-binary

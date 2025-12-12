@@ -15,7 +15,7 @@ usuario = "analista"
 contraseña = "2025Anal1st@"  
 host = "192.168.10.37"
 puerto = 5432
-base_datos = "migracion"
+base_datos = "BcorpMigracionPrueba"
 
 
 # Requiere: pip install psycopg2-binary

@@ -86,10 +86,11 @@ def buscar_en_bases_por_identificacion(valores, tipo):
                     {filtro_mes_pyme}
                     ORDER BY c.identificacion, c.celular, a.valor, m.id_mes
                 """
-                df = pd.read_sql(text(query), engine, params={"valores": valores})
+                df = pd.read_sql(text(query), engine, params={"valores": tuple (valores)})
 
             elif tipo == '2':  # TITULARIDAD
-                query = """
+                filtro_mes_pyme = "AND m.id_mes >= 10" if base == "base_pyme" else ""
+                query = f"""
                     SELECT
                         c.identificacion,
                         c.celular,
@@ -98,10 +99,12 @@ def buscar_en_bases_por_identificacion(valores, tipo):
                     FROM cliente_plan_info cp
                     JOIN cliente c ON c.id_cliente = cp.id_cliente
                     JOIN periodo_carga p ON cp.id_periodo = p.id_periodo
-                    WHERE c.identificacion IN :valores OR c.celular IN :valores
+                    WHERE( c.identificacion IN :valores OR c.celular IN :valores)
+                     {filtro_mes_pyme}
                     ORDER BY c.identificacion, c.celular
                 """
-                df = pd.read_sql(text(query), engine, params={"valores": valores})
+                df = pd.read_sql(text(query), engine, params={"valores": tuple (valores)})
+
 
             if not df.empty:
                 resultados = pd.concat([resultados, df], ignore_index=True)
@@ -127,19 +130,27 @@ def buscar():
     tipo = request.args.get('tipo', '1')  # 1=Origen, 2=Titularidad
     resultados = []
     mensaje = ""
- 
+    
+    valores_input = ""
+    valores = []
 
-    valores_input = request.form.get('valores', '').strip()
-    valores = [v for v in re.split(r'[\s,]+', valores_input) if v]
+    # SOLO leer valores cuando el usuario hace POST
+    if request.method == 'POST':
+        valores_input = request.form.get('valores', '').strip()
+        valores = [str(v).strip() for v in re.split(r'[\s,]+', valores_input) if v]
 
+        # ⛔ VALIDAR SOLO EN POST
+        if not valores:
+            mensaje = "⚠️ Debes ingresar al menos una cédula o celular."
+            return render_template('buscar.html', tipo=tipo, resultados=[], mensaje=mensaje, valores_input=valores_input)
 
-    resultados = buscar_en_bases_por_identificacion(valores, tipo)
+        # Ejecutar búsqueda
+        resultados = buscar_en_bases_por_identificacion(valores, tipo)
 
-    if not resultados:
-        mensaje = "❌ No se encontraron resultados."
+        if not resultados:
+            mensaje = "❌ No se encontraron resultados."
 
-
-
+    # GET: simplemente mostrar la página vacía
     return render_template('buscar.html', tipo=tipo, resultados=resultados, mensaje=mensaje, valores_input=valores_input)
 
 

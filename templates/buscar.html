@@ -11,18 +11,18 @@
 {% if tipo=='1' %}🔍 Consulta por Origen{% elif tipo=='2' %}🔍 Consulta por Titularidad{% endif %}
 </h2>
 
-<form method="POST" style="display:flex; justify-content:center; margin-top:20px;">
-    <div style="width:300px;">  <!-- cuadro pequeño centrado -->
+<form method="POST" id="formulario" style="display:flex; justify-content:center; margin-top:20px;">
+    <div style="width:300px;">
         <label style="display:block; margin-bottom:5px;">
             {% if tipo=='1' %}
-                Base de origen (pospago, prepago, base_pyme):
+                Cédula o celular:
             {% else %}
                 Cédula o celular (Por favor, ingrese cédulas o números para empezar la búsqueda. (max.5)):
             {% endif %}
         </label>
         
-        <textarea name="valores" rows="3" style="width:100%; font-size:14px; resize:vertical;" 
-                  placeholder="{% if tipo=='1' %}Ej: pospago{% else %}Pegue aquí los números...{% endif %}">{{ valores_input or '' }}</textarea>
+        <textarea name="valores" rows="3" style="width:100%; font-size:14px; resize:vertical;"
+            placeholder="Pegue aquí los números...">{{ valores_input or '' }}</textarea>
     </div>
 </form>
 
@@ -30,6 +30,7 @@
     <button form="formulario" type="submit" class="buscar">Buscar</button>
     <a href="/" class="volver">⬅️ Volver al inicio</a>
 </div>
+
 
 {% if mensaje %}
 <div class="mensaje" style="text-align:center; margin-top:10px;">{{ mensaje }}</div>
